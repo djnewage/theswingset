@@ -146,12 +146,18 @@ export async function hasLiked(postId, uid) {
 
 // ---------- comments ----------
 
-export async function addComment(postId, { authorId, authorName, authorPhotoURL, text }) {
+/**
+ * `replyTo` threads the comment under a top-level parent:
+ * { commentId, authorId, authorName } — always the THREAD ROOT, so replies
+ * stay one level deep (replying to a reply joins the same thread).
+ */
+export async function addComment(postId, { authorId, authorName, authorPhotoURL, text, replyTo = null }) {
   await addDoc(collection(db, 'posts', postId, 'comments'), {
     authorId,
     authorName,
     authorPhotoURL: authorPhotoURL ?? null,
     text,
+    replyTo,
     createdAt: serverTimestamp(),
   })
 }

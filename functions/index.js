@@ -46,11 +46,26 @@ exports.onCommentCreated = onDocumentCreated('posts/{postId}/comments/{commentId
   const post = (await db.doc(`posts/${event.params.postId}`).get()).data()
   const comment = event.data?.data()
   if (!post || !comment) return
-  await notify(post.authorUids, comment.authorId, {
-    type: 'comment',
-    text: `${comment.authorName} commented on your post`,
-    link: `/post/${event.params.postId}`,
-  })
+
+  // Replies notify the person replied to; post authors are told about the
+  // comment unless they're the reply target (no double notification).
+  const replyTargetId = comment.replyTo?.authorId ?? null
+  if (replyTargetId) {
+    await notify([replyTargetId], comment.authorId, {
+      type: 'comment_reply',
+      text: `${comment.authorName} replied to your comment`,
+      link: `/post/${event.params.postId}`,
+    })
+  }
+  await notify(
+    post.authorUids.filter((uid) => uid !== replyTargetId),
+    comment.authorId,
+    {
+      type: 'comment',
+      text: `${comment.authorName} commented on your post`,
+      link: `/post/${event.params.postId}`,
+    },
+  )
 })
 
 exports.onCommentDeleted = onDocumentDeleted('posts/{postId}/comments/{commentId}', (event) =>
