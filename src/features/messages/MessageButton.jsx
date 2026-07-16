@@ -18,6 +18,7 @@ export function MessageButton({ member, couple }) {
   const { user } = useAuth()
   const me = useMyEntity()
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
 
   // A linked member's primary entity is their couple — resolve it.
   const { data: memberCouple, isPending: coupleLoading } = useQuery({
@@ -68,11 +69,13 @@ export function MessageButton({ member, couple }) {
   const open = async () => {
     if (busy) return
     setBusy(true)
+    setFailed(false)
     try {
       const threadId = await ensureThread(me.entity, target.entity)
       navigate(`/messages/${threadId}`)
     } catch (err) {
-      console.error(err)
+      console.error('open thread failed', err)
+      setFailed(true)
       setBusy(false)
     }
   }
@@ -92,9 +95,12 @@ export function MessageButton({ member, couple }) {
     <button
       onClick={open}
       disabled={busy}
-      className="flex h-10 items-center rounded-2xl bg-charcoal-800 px-4 text-sm font-semibold text-charcoal-100 ring-1 ring-charcoal-600 transition hover:bg-charcoal-700 disabled:opacity-50"
+      title={failed ? 'Couldn’t open the conversation — try again' : undefined}
+      className={`flex h-10 items-center rounded-2xl bg-charcoal-800 px-4 text-sm font-semibold ring-1 transition hover:bg-charcoal-700 disabled:opacity-50 ${
+        failed ? 'text-red-400 ring-red-900' : 'text-charcoal-100 ring-charcoal-600'
+      }`}
     >
-      {busy ? 'Opening…' : 'Message'}
+      {busy ? 'Opening…' : failed ? 'Try again' : 'Message'}
     </button>
   )
 }

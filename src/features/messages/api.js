@@ -55,7 +55,14 @@ export function messageBlockReason({ me, target, targetType, connections }) {
 export async function ensureThread(myEntity, theirEntity) {
   const id = threadIdFor(myEntity.id, theirEntity.id)
   const ref = doc(db, 'threads', id)
-  if ((await getDoc(ref)).exists()) return id
+  try {
+    if ((await getDoc(ref)).exists()) return id
+  } catch (err) {
+    // Rules can't evaluate memberUids on a missing doc, so a get on a
+    // not-yet-created thread comes back permission-denied — treat it as
+    // "no thread yet" and proceed to create.
+    if (err.code !== 'permission-denied') throw err
+  }
 
   const [a, b] = [myEntity, theirEntity].sort((x, y) => (x.id < y.id ? -1 : 1))
   await setDoc(ref, {
