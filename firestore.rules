@@ -198,12 +198,21 @@ service cloud.firestore {
         return request.auth.uid in resource.data.authorUids;
       }
 
-      allow get: if isSignedIn()
-        && (resource.data.visibility == 'members' || isPostAuthor());
-      // Feed queries must filter visibility == 'members'; authors may also
-      // query their own posts (filtered on authorUids).
-      allow list: if isSignedIn()
-        && (resource.data.visibility == 'members' || isPostAuthor());
+      // Connections-only posts are readable by members connected to the
+      // author entity (user or couple) — the "just my connections" audience.
+      function canSeePost() {
+        return resource.data.visibility == 'members'
+          || isPostAuthor()
+          || (resource.data.visibility == 'connections'
+              && connectedTo(resource.data.authorId));
+      }
+
+      allow get: if isSignedIn() && canSeePost();
+      // Feed queries must filter visibility == 'members', or filter
+      // visibility == 'connections' pinned to a single authorId (so the
+      // connection check is provable per query); authors may also query
+      // their own posts (filtered on authorUids).
+      allow list: if isSignedIn() && canSeePost();
 
       allow create: if isSignedIn()
         && request.auth.uid in request.resource.data.authorUids

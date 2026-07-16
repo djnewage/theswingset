@@ -46,6 +46,7 @@ export function ComposePage() {
           : null,
       })
       queryClient.invalidateQueries({ queryKey: ['feed'] })
+      queryClient.invalidateQueries({ queryKey: ['feedAudience'] })
       navigate('/')
     } catch (err) {
       console.error(err)

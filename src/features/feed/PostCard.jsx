@@ -63,7 +63,11 @@ export function PostCard({ post, onShare }) {
               </span>
             )}
           </p>
-          <p className="text-xs text-charcoal-400">{timeAgo(post.createdAt)}</p>
+          <p className="text-xs text-charcoal-400">
+            {timeAgo(post.createdAt)}
+            {post.visibility === 'connections' && <span className="ml-1.5">· 🤝 connections</span>}
+            {post.visibility === 'private' && <span className="ml-1.5">· 🔒 private</span>}
+          </p>
         </div>
 
         <Menu as="div" className="relative">

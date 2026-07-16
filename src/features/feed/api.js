@@ -57,7 +57,8 @@ export async function createPost(author, { text, files = [], visibility, sharedF
 }
 
 export async function fetchFeedPage(cursor) {
-  // Members-wide feed; narrows to connections + local in Phase 5.
+  // Members-wide feed; connections-only posts merge in via
+  // fetchConnectionsFeedPosts (rules require per-author queries for those).
   const parts = [
     collection(db, 'posts'),
     where('visibility', '==', 'members'),
@@ -72,6 +73,49 @@ export async function fetchFeedPage(cursor) {
     posts: snap.docs.map((d) => ({ id: d.id, ...d.data() })),
     cursor: snap.docs.length === PAGE_SIZE ? snap.docs[snap.docs.length - 1] : null,
   }
+}
+
+/**
+ * Connections-only posts from the entities I'm connected to. Security rules
+ * can only prove the connection per-author, so this runs one small query per
+ * connected entity and merges newest-first.
+ */
+export async function fetchConnectionsFeedPosts(entityIds) {
+  const pages = await Promise.all(
+    entityIds.map((id) =>
+      getDocs(
+        query(
+          collection(db, 'posts'),
+          where('visibility', '==', 'connections'),
+          where('authorId', '==', id),
+          orderBy('createdAt', 'desc'),
+          limit(25),
+        ),
+      ).catch(() => null), // stale connection or race: skip quietly
+    ),
+  )
+  return pages
+    .filter(Boolean)
+    .flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
+}
+
+/**
+ * My own recent non-members posts (connections/private), so authors see
+ * their posts in their own feed. Rules allow this via the authorUids filter.
+ */
+export async function fetchMyAudiencePosts(uid) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'posts'),
+      where('authorUids', 'array-contains', uid),
+      orderBy('createdAt', 'desc'),
+      limit(25),
+    ),
+  )
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((p) => p.visibility !== 'members')
 }
 
 export async function fetchPost(postId) {

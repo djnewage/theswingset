@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useInfiniteQuery } from '@tanstack/react-query'
-import { fetchFeedPage } from './api'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useAuth } from '../auth/AuthContext'
+import { fetchMyConnections } from '../connections/api'
+import { fetchConnectionsFeedPosts, fetchFeedPage, fetchMyAudiencePosts } from './api'
+import { usePostableAuthors } from './useAuthor'
 import { useBlocks } from './useBlocks'
 import { PostCard } from './PostCard'
 import { Logo } from '../../components/Logo'
@@ -9,6 +12,7 @@ import { NotificationsBell } from '../notifications/NotificationsBell'
 
 export function FeedPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const { blockedIds } = useBlocks()
   const sentinel = useRef(null)
 
@@ -19,6 +23,30 @@ export function FeedPage() {
       initialPageParam: null,
       getNextPageParam: (lastPage) => lastPage.cursor,
     })
+
+  // Connections-only posts from my connections (merged into the feed below).
+  const myIds = usePostableAuthors().map((a) => a.id)
+  const { data: connPosts = [] } = useQuery({
+    queryKey: ['feedAudience', 'connections', user.uid],
+    queryFn: async () => {
+      const conns = await fetchMyConnections(user.uid)
+      const others = [
+        ...new Set(
+          conns
+            .filter((c) => c.status === 'accepted')
+            .map((c) => (myIds.includes(c.fromId) ? c.toId : c.fromId))
+            .filter((id) => !myIds.includes(id)),
+        ),
+      ]
+      return others.length ? fetchConnectionsFeedPosts(others) : []
+    },
+  })
+
+  // My own connections/private posts (the members-wide query excludes them).
+  const { data: myAudiencePosts = [] } = useQuery({
+    queryKey: ['feedAudience', 'mine', user.uid],
+    queryFn: () => fetchMyAudiencePosts(user.uid),
+  })
 
   // Infinite scroll: load more when the sentinel enters the viewport.
   useEffect(() => {
@@ -36,9 +64,21 @@ export function FeedPage() {
     return () => observer.disconnect()
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
-  const posts = (data?.pages.flatMap((p) => p.posts) ?? []).filter(
-    (post) => !blockedIds.includes(post.authorId),
-  )
+  // Interleave connections-only posts by timestamp. While older members-feed
+  // pages remain unloaded, only merge connections posts newer than the oldest
+  // loaded post so ordering stays stable as pages stream in.
+  const memberPosts = data?.pages.flatMap((p) => p.posts) ?? []
+  const oldestLoaded =
+    memberPosts.length > 0
+      ? (memberPosts[memberPosts.length - 1].createdAt?.toMillis() ?? 0)
+      : 0
+  const audiencePosts = [...connPosts, ...myAudiencePosts]
+  const mergeable = hasNextPage
+    ? audiencePosts.filter((p) => (p.createdAt?.toMillis() ?? 0) >= oldestLoaded)
+    : audiencePosts
+  const posts = [...memberPosts, ...mergeable]
+    .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
+    .filter((post) => !blockedIds.includes(post.authorId))
 
   return (
     <div>
