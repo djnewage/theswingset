@@ -323,21 +323,85 @@ exports.onUserDeleted = onDocumentDeleted('users/{uid}', async (event) => {
   logger.info(`account data wiped for ${uid}`)
 })
 
-// ---------- image moderation hook (stub) ----------
-//
-// Runs on EVERY image upload. Wire this to a vision moderation API
-// (e.g. Cloud Vision SafeSearch) before launch:
-//
-//   const vision = require('@google-cloud/vision')
-//   const [result] = await new vision.ImageAnnotatorClient().safeSearchDetection(
-//     `gs://${event.data.bucket}/${event.data.name}`)
-//   → if adult/racy content in a non-album path: delete the object and flag
-//     a `reports` doc for admin review.
+// ---------- image moderation (Cloud Vision SafeSearch) ----------
+
+const vision = require('@google-cloud/vision')
+const visionClient = new vision.ImageAnnotatorClient()
+
+const LIKELY_PLUS = ['LIKELY', 'VERY_LIKELY']
+
+// Albums sit behind access levels (members / connections / request-to-view),
+// so adult content is permitted there. Verification selfies are admin-only.
+// Everything else — profile photos, couple covers, post images, event
+// covers — is visible to all members and must stay non-explicit.
+// Violent content is disallowed everywhere.
+function moderationPolicy(surface, safe) {
+  const violence = LIKELY_PLUS.includes(safe.violence)
+  if (surface === 'albums' || surface === 'verifications') {
+    return { remove: violence, flag: false }
+  }
+  return {
+    remove: violence || LIKELY_PLUS.includes(safe.adult),
+    // Racy-but-not-adult on a member-wide surface: leave it up, let an admin decide.
+    flag: safe.racy === 'VERY_LIKELY',
+  }
+}
+
 exports.moderateImage = onObjectFinalized(async (event) => {
-  if (!event.data.contentType?.startsWith('image/')) return
-  logger.info('moderation stub: image uploaded', {
-    path: event.data.name,
-    size: event.data.size,
+  const { bucket, name: path, contentType } = event.data
+  if (!contentType?.startsWith('image/')) return
+
+  let safe
+  try {
+    const [result] = await visionClient.safeSearchDetection(`gs://${bucket}/${path}`)
+    safe = result.safeSearchAnnotation
+  } catch (err) {
+    // Vision unavailable (emulator, quota, API disabled): leave the image up
+    // but surface the failure in logs — do NOT silently pass unmoderated.
+    logger.error('safeSearch failed — image NOT moderated', { path, error: err.message })
+    return
+  }
+  if (!safe) return
+
+  const [surface, ownerId] = path.split('/')
+  const { remove, flag } = moderationPolicy(surface, safe)
+  if (!remove && !flag) return
+
+  if (remove) {
+    await admin
+      .storage()
+      .bucket(bucket)
+      .file(path)
+      .delete()
+      .catch((err) => logger.error('moderation delete failed', { path, error: err.message }))
+  }
+
+  await db.collection('reports').add({
+    reporterId: 'system:image-moderation',
+    targetType: 'image',
+    targetId: path,
+    reason: remove ? 'image auto-removed' : 'image flagged for review',
+    details:
+      `SafeSearch — adult: ${safe.adult}, racy: ${safe.racy}, violence: ${safe.violence}` +
+      (remove ? '. File deleted; check for an orphaned post/profile reference.' : ''),
+    status: 'open',
+    createdAt: FieldValue.serverTimestamp(),
   })
-  // TODO(owner): call moderation API and enforce content policy.
+
+  // Tell the uploader why their photo vanished. Path owner is a uid on every
+  // surface except couple covers, where it's a coupleId.
+  if (remove) {
+    let uids = [ownerId]
+    if (surface === 'couples') {
+      const couple = (await db.doc(`couples/${ownerId}`).get()).data()
+      uids = couple?.partnerUids ?? []
+    }
+    await notify(uids, null, {
+      type: 'moderation',
+      text: 'One of your photos was removed for violating community guidelines',
+      link: '/profile',
+    }).catch(() => {})
+  }
+
+  logger.warn('moderation action', { path, removed: remove, flagged: flag, safe })
 })

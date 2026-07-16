@@ -62,8 +62,19 @@ cd functions && npm install && cd ..
 firebase deploy --only functions
 ```
 
-The image-moderation function is a stub — wire it to Cloud Vision SafeSearch
-(see the TODO in `functions/index.js`) before opening signups.
+Image moderation runs Cloud Vision SafeSearch on every upload: violent
+content is removed everywhere; explicit content is removed from member-wide
+surfaces (profile/cover/post/event images) but allowed in access-gated
+albums; borderline images are flagged as `reports` for admin review. Enable
+the API once per project before deploying:
+
+```bash
+gcloud services enable vision.googleapis.com
+```
+
+(or Console → APIs & Services → enable **Cloud Vision API**). Vision calls
+are unavailable in the emulator — the function logs the failure and leaves
+the image up, so exercise moderation against a staging project.
 
 ## Security model (enforced in `firestore.rules` / `storage.rules`)
 

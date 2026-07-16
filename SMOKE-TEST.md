@@ -93,6 +93,12 @@ C = a single) in separate browser profiles.
 - [ ] Reference: connected member leaves one; subject can remove; non-connected member is rejected by rules
 - [ ] Travel plan appears in Discover ("traveling to your area" when city matches your location)
 
+## Image moderation (staging project only — Vision is unavailable in the emulator)
+- [ ] Explicit image as profile photo → file deleted, `reports` doc created, uploader notified
+- [ ] Same image in a request-to-view album → stays up, no report
+- [ ] Violent image in an album → deleted + reported
+- [ ] Normal photo (faces, landscape) on any surface → untouched, no report
+
 ## PWA & privacy
 - [ ] Lighthouse: installable PWA; app opens standalone from home screen
 - [ ] Every response carries `X-Robots-Tag: noindex` (check network tab on hosting)
