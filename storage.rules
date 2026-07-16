@@ -1,0 +1,88 @@
+rules_version = '2';
+
+// Deny-by-default. Uploads are members-only images, written only by their
+// owner. All app images are re-encoded client-side before upload (EXIF/GPS
+// stripped); these rules cap size/type as the server-side backstop.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAllowedImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp)')
+        && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    function isAdmin() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    // Profile photos: any member may view; only the owner may write.
+    match /users/{uid}/profile/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && isAllowedImage();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Couple cover photos: any member may view; only a partner may write
+    // (cross-service check against the Firestore couple doc).
+    match /couples/{coupleId}/cover/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.partnerUids
+        && isAllowedImage();
+      allow delete: if isSignedIn()
+        && request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.partnerUids;
+    }
+
+    // Post images: uploader-scoped path; any member may view.
+    match /posts/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && isAllowedImage();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Event cover photos: uploader-scoped path; any member may view.
+    match /events/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && isAllowedImage();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Album photo files: uploader-scoped writes. Reads are owner-only at the
+    // storage layer — viewers receive tokenized download URLs through the
+    // Firestore `albums/{id}/photos` docs, which enforce the album's access
+    // level. (Note: a previously shared token URL keeps working until the
+    // file is deleted; revoking a grant gates the doc, not old URLs.)
+    match /albums/{uid}/{fileName} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && isAllowedImage();
+      allow delete: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Verification selfies: locked path — the uploader may write (and later
+    // delete a pending one); ONLY admins may view.
+    match /verifications/{uid}/{fileName} {
+      allow read: if isAdmin();
+      allow create, update: if isSignedIn()
+        && request.auth.uid == uid
+        && isAllowedImage();
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

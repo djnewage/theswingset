@@ -1,0 +1,698 @@
+rules_version = '2';
+
+// Deny-by-default. Each build phase opens exactly the access it needs.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Admins are provisioned by creating admins/{uid} docs from the Firebase
+    // console / Admin SDK — clients can never write them.
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Server-side 18+ backstop (client validates exactly; this stops forged
+    // writes). 6574 days ≈ 18 years including leap days.
+    function dobIsAdult(dob) {
+      return dob is timestamp && dob < request.time - duration.value(6574, 'd');
+    }
+
+    function coupleData(coupleId) {
+      return get(/databases/$(database)/documents/couples/$(coupleId)).data;
+    }
+
+    // ----- connection helpers -----
+    // A member's "primary entity" is their couple when linked, else their
+    // uid. Connections are stored once per pair under the id `${a}_${b}`
+    // (sorted client-side), so we check both orders.
+    function myEntity() {
+      let myCoupleId = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.coupleId;
+      return myCoupleId != null ? myCoupleId : request.auth.uid;
+    }
+
+    function connAccepted(a, b) {
+      return exists(/databases/$(database)/documents/connections/$(a + '_' + b))
+        && get(/databases/$(database)/documents/connections/$(a + '_' + b)).data.status == 'accepted';
+    }
+
+    function connectedTo(entityId) {
+      return connAccepted(myEntity(), entityId) || connAccepted(entityId, myEntity());
+    }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      // Visibility-narrowed reads: members-wide, connections-only, or
+      // private (self + partner). Admins see all (moderation).
+      allow get: if isSelf(uid)
+        || isAdmin()
+        || (isSignedIn()
+            && (resource.data.visibility == 'members'
+                || (resource.data.visibility == 'connections'
+                    && connectedTo(resource.data.coupleId != null ? resource.data.coupleId : uid))
+                || (resource.data.visibility == 'private'
+                    && resource.data.coupleId != null
+                    && request.auth.uid in coupleData(resource.data.coupleId).partnerUids)));
+      // Enumeration only of members-visible profiles (query must filter);
+      // admins may list everyone.
+      allow list: if isAdmin()
+        || (isSignedIn() && resource.data.visibility == 'members');
+
+      allow create: if isSelf(uid)
+        && dobIsAdult(request.resource.data.dob)
+        && request.resource.data.visibility == 'members'
+        && request.resource.data.coupleId == null
+        && request.resource.data.verified == false
+        && validProfileFields();
+
+      allow update: if (isSelf(uid)
+        // DOB and createdAt are immutable after signup.
+        && request.resource.data.dob == resource.data.dob
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'firstName', 'lastName', 'bio', 'location',
+          'photoURL', 'interests', 'visibility', 'coupleId',
+          'boundaries', 'messagePolicy', 'prompts'
+        ])
+        && validProfileFields()
+        && validCoupleIdChange())
+        // Admins may flip ONLY moderation flags.
+        || (isAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['verified', 'banned']));
+
+      allow delete: if isSelf(uid);
+
+      function validProfileFields() {
+        return request.resource.data.displayName is string
+          && request.resource.data.displayName.size() >= 1
+          && request.resource.data.displayName.size() <= 40
+          && request.resource.data.bio is string
+          && request.resource.data.bio.size() <= 600
+          && request.resource.data.visibility in ['members', 'connections', 'private']
+          && request.resource.data.interests is list
+          && request.resource.data.interests.size() <= 30
+          && (request.resource.data.location == null
+              || (request.resource.data.location is string
+                  && request.resource.data.location.size() <= 80));
+      }
+
+      // coupleId may only be: unchanged, cleared (unlink), or set to a couple
+      // this user is actually a partner in.
+      function validCoupleIdChange() {
+        return request.resource.data.coupleId == resource.data.coupleId
+          || request.resource.data.coupleId == null
+          || (request.resource.data.coupleId is string
+              && request.auth.uid in coupleData(request.resource.data.coupleId).partnerUids);
+      }
+    }
+
+    // ---------- couples ----------
+    match /couples/{coupleId} {
+      allow get: if isSignedIn();
+      // Discover browses couples (all couple profiles are member-visible).
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.partnerUids == [request.auth.uid]
+        && request.resource.data.coupleName is string
+        && request.resource.data.coupleName.size() >= 1
+        && request.resource.data.coupleName.size() <= 60
+        && request.resource.data.verified == false;
+
+      allow update: if (isSignedIn()
+        && (partnerEdit() || partnerJoin() || partnerLeave()))
+        // Admins may flip ONLY the verification badge.
+        || (isAdmin()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verified']));
+
+      // Only a sole remaining partner may delete the couple doc.
+      allow delete: if isSignedIn()
+        && resource.data.partnerUids == [request.auth.uid];
+
+      // Existing partner edits content; membership and verification frozen.
+      function partnerEdit() {
+        return request.auth.uid in resource.data.partnerUids
+          && request.resource.data.partnerUids == resource.data.partnerUids
+          && request.resource.data.verified == resource.data.verified
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.coupleName is string
+          && request.resource.data.coupleName.size() >= 1
+          && request.resource.data.coupleName.size() <= 60;
+      }
+
+      // Second partner joins by presenting a live invite code (the update
+      // must carry usedInviteCode resolving to THIS couple).
+      function partnerJoin() {
+        return !(request.auth.uid in resource.data.partnerUids)
+          && resource.data.partnerUids.size() == 1
+          && request.resource.data.partnerUids
+             == resource.data.partnerUids.concat([request.auth.uid])
+          && request.resource.data.usedInviteCode is string
+          && get(/databases/$(database)/documents/coupleInvites/$(request.resource.data.usedInviteCode)).data.coupleId == coupleId
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['partnerUids', 'usedInviteCode', 'linkedAt']);
+      }
+
+      // A partner may remove exactly themself.
+      function partnerLeave() {
+        return request.auth.uid in resource.data.partnerUids
+          && request.resource.data.partnerUids
+             == resource.data.partnerUids.removeAll([request.auth.uid])
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['partnerUids']);
+      }
+    }
+
+    // ---------- couple invite codes ----------
+    // Doc ID is the code itself: random and unguessable, acting as a
+    // capability. Reading one requires knowing it.
+    match /coupleInvites/{code} {
+      allow get: if isSignedIn();
+      // Only the creator may list their own invites (query must filter on it).
+      allow list: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.coupleId is string
+        && coupleData(request.resource.data.coupleId).partnerUids == [request.auth.uid];
+
+      // Creator or either partner (the joiner spends the code) may delete.
+      allow delete: if isSignedIn()
+        && (resource.data.createdBy == request.auth.uid
+            || request.auth.uid in coupleData(resource.data.coupleId).partnerUids);
+    }
+
+    // ---------- posts ----------
+    match /posts/{postId} {
+      // authorUids lists every uid allowed to act as the author (both
+      // partners for couple posts) — checked without extra get()s.
+      function isPostAuthor() {
+        return request.auth.uid in resource.data.authorUids;
+      }
+
+      allow get: if isSignedIn()
+        && (resource.data.visibility == 'members' || isPostAuthor());
+      // Feed queries must filter visibility == 'members'; authors may also
+      // query their own posts (filtered on authorUids).
+      allow list: if isSignedIn()
+        && (resource.data.visibility == 'members' || isPostAuthor());
+
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.authorUids
+        && validAuthor()
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 2000
+        && request.resource.data.imageURLs is list
+        && request.resource.data.imageURLs.size() <= 4
+        && request.resource.data.visibility in ['members', 'connections', 'private']
+        && request.resource.data.likeCount == 0
+        && request.resource.data.commentCount == 0
+        && request.resource.data.shareCount == 0;
+
+      // Counters are maintained by Cloud Functions (admin SDK bypasses
+      // rules); clients may not edit posts in v1.
+      allow update: if false;
+      allow delete: if isSignedIn() && isPostAuthor();
+
+      function validAuthor() {
+        let d = request.resource.data;
+        return (d.authorType == 'user'
+                && d.authorId == request.auth.uid
+                && d.authorUids == [request.auth.uid])
+            || (d.authorType == 'couple'
+                && d.authorUids == coupleData(d.authorId).partnerUids);
+      }
+
+      // ----- likes -----
+      match /likes/{uid} {
+        allow read: if isSignedIn();
+        allow create: if isSelf(uid);
+        allow delete: if isSelf(uid);
+      }
+
+      // ----- comments -----
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 1000;
+        allow update: if false;
+        // Commenter may delete their own; the post author may moderate.
+        allow delete: if isSignedIn()
+          && (resource.data.authorId == request.auth.uid
+              || request.auth.uid
+                 in get(/databases/$(database)/documents/posts/$(postId)).data.authorUids);
+      }
+    }
+
+    // ---------- events ----------
+    match /events/{eventId} {
+      function isHost() {
+        return request.auth.uid in resource.data.hostUids;
+      }
+
+      allow get: if isSignedIn()
+        && (resource.data.visibility == 'members' || isHost());
+      allow list: if isSignedIn()
+        && (resource.data.visibility == 'members' || isHost());
+
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.hostUids
+        && ((request.resource.data.hostType == 'user'
+              && request.resource.data.hostId == request.auth.uid
+              && request.resource.data.hostUids == [request.auth.uid])
+            || (request.resource.data.hostType == 'couple'
+              && request.resource.data.hostUids == coupleData(request.resource.data.hostId).partnerUids))
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.startsAt is timestamp
+        && request.resource.data.visibility in ['members', 'connections', 'private']
+        && request.resource.data.goingCount == 0
+        && request.resource.data.interestedCount == 0;
+
+      // Host may edit content; host identity and counters are frozen
+      // (counters are maintained by Cloud Functions).
+      allow update: if isSignedIn() && isHost()
+        && request.resource.data.hostUids == resource.data.hostUids
+        && request.resource.data.hostId == resource.data.hostId
+        && request.resource.data.goingCount == resource.data.goingCount
+        && request.resource.data.interestedCount == resource.data.interestedCount;
+
+      allow delete: if isSignedIn() && isHost();
+
+      // ----- RSVPs -----
+      match /rsvps/{attendeeId} {
+        function eventData() {
+          return get(/databases/$(database)/documents/events/$(eventId)).data;
+        }
+
+        allow read: if isSignedIn();
+
+        // Attendees manage their own RSVP. Approval-required events can't be
+        // self-set to 'going' — the host promotes 'requested' RSVPs.
+        allow create, update: if (isSelf(attendeeId)
+          && request.resource.data.attendeeId == request.auth.uid
+          && request.resource.data.status
+             in ['going', 'interested', 'declined', 'requested', 'waitlist']
+          && request.resource.data.eventId == eventId
+          && !(request.resource.data.status == 'going'
+               && eventData().approvalRequired == true
+               && resource == null)
+          && !(request.resource.data.status == 'going'
+               && eventData().approvalRequired == true
+               && resource != null
+               && resource.data.status != 'going'))
+          // Hosts approve, promote, demote, or remove any attendee.
+          || (isSignedIn()
+              && request.auth.uid in eventData().hostUids
+              && request.resource.data.status in ['going', 'declined', 'waitlist']
+              && request.resource.data.diff(resource.data).affectedKeys()
+                 .hasOnly(['status', 'updatedAt']));
+
+        allow delete: if isSelf(attendeeId)
+          || (isSignedIn() && request.auth.uid
+              in get(/databases/$(database)/documents/events/$(eventId)).data.hostUids);
+      }
+
+      // ----- event chat -----
+      match /messages/{messageId} {
+        allow read: if isSignedIn();
+        // Chat is for the host and members who have RSVP'd.
+        allow create: if isSignedIn()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 1000
+          && (request.auth.uid
+                in get(/databases/$(database)/documents/events/$(eventId)).data.hostUids
+              || exists(/databases/$(database)/documents/events/$(eventId)/rsvps/$(request.auth.uid)));
+        allow update: if false;
+        allow delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
+      }
+    }
+
+    // Calendar view: collection-group query over one's own RSVPs.
+    match /{path=**}/rsvps/{attendeeId} {
+      allow list: if isSignedIn() && resource.data.attendeeId == request.auth.uid;
+    }
+
+    // ---------- reports (write-only for members; admins triage) ----------
+    match /reports/{reportId} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.reporterId == request.auth.uid
+        && request.resource.data.targetType in ['post', 'comment', 'user', 'couple']
+        && request.resource.data.reason is string
+        && request.resource.data.status == 'open';
+      allow update: if isAdmin()
+        && request.resource.data.status in ['open', 'resolved', 'dismissed']
+        && request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['status', 'reviewedBy', 'reviewedAt']);
+      allow delete: if false;
+    }
+
+    // ---------- connections ----------
+    // Doc ID is the sorted entity pair `${a}_${b}` (entities are uids or
+    // coupleIds), so a pair can hold exactly one connection. pairUids lists
+    // every human involved on both sides.
+    match /connections/{connId} {
+      allow get: if isSignedIn();
+      // Members may list only connections that involve them.
+      allow list: if isSignedIn() && request.auth.uid in resource.data.pairUids;
+
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.fromUids
+        && request.resource.data.status == 'pending'
+        && request.resource.data.fromId != request.resource.data.toId
+        && (connId == request.resource.data.fromId + '_' + request.resource.data.toId
+            || connId == request.resource.data.toId + '_' + request.resource.data.fromId)
+        && validEntity(request.resource.data.fromType, request.resource.data.fromId, request.resource.data.fromUids)
+        && validEntity(request.resource.data.toType, request.resource.data.toId, request.resource.data.toUids)
+        // Can't connect with someone who blocked you (and vice versa is
+        // handled client-side by hiding them).
+        && !exists(/databases/$(database)/documents/blocks/$(request.resource.data.toId + '_' + request.resource.data.fromId));
+
+      // Only the receiving side may accept. When the receiving couple has
+      // dual consent enabled, BOTH partners must approve before the status
+      // may become accepted.
+      allow update: if isSignedIn()
+        && request.auth.uid in resource.data.toUids
+        && resource.data.status == 'pending'
+        && onlyAddsOwnApproval()
+        && (fullAccept() || partialApproval());
+
+      function toDualConsent() {
+        return resource.data.toType == 'couple'
+          && 'dualConsent' in coupleData(resource.data.toId)
+          && coupleData(resource.data.toId).dualConsent.connections == true;
+      }
+
+      function newApprovals() {
+        return 'approvals' in request.resource.data ? request.resource.data.approvals : {};
+      }
+
+      function onlyAddsOwnApproval() {
+        return !('approvals' in request.resource.data)
+          || newApprovals()
+             .diff('approvals' in resource.data ? resource.data.approvals : {})
+             .affectedKeys().hasOnly([request.auth.uid]);
+      }
+
+      function fullAccept() {
+        return request.resource.data.status == 'accepted'
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'acceptedAt', 'approvals'])
+          && (!toDualConsent()
+              || newApprovals().keys().hasAll(coupleData(resource.data.toId).partnerUids));
+      }
+
+      function partialApproval() {
+        return request.resource.data.status == 'pending'
+          && toDualConsent()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvals']);
+      }
+
+      // Either side may decline, cancel, or disconnect.
+      allow delete: if isSignedIn() && request.auth.uid in resource.data.pairUids;
+
+      function validEntity(entityType, entityId, entityUids) {
+        return (entityType == 'user' && entityUids == [entityId])
+          || (entityType == 'couple' && entityUids == coupleData(entityId).partnerUids);
+      }
+    }
+
+    // ---------- albums ----------
+    match /albums/{albumId} {
+      function isAlbumOwner() {
+        return request.auth.uid in resource.data.ownerUids;
+      }
+
+      // Album metadata (title, access level) is member-visible; the photos
+      // inside are what's gated.
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.ownerUids
+        && ((request.resource.data.ownerType == 'user'
+              && request.resource.data.ownerId == request.auth.uid
+              && request.resource.data.ownerUids == [request.auth.uid])
+            || (request.resource.data.ownerType == 'couple'
+              && request.resource.data.ownerUids == coupleData(request.resource.data.ownerId).partnerUids))
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 60
+        && request.resource.data.accessLevel in ['public-to-members', 'connections', 'request-only'];
+
+      allow update: if isSignedIn() && isAlbumOwner()
+        && request.resource.data.ownerUids == resource.data.ownerUids
+        && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if isSignedIn() && isAlbumOwner();
+
+      function albumData() {
+        return get(/databases/$(database)/documents/albums/$(albumId)).data;
+      }
+
+      function hasGrant() {
+        return exists(/databases/$(database)/documents/albums/$(albumId)/grants/$(request.auth.uid))
+          && get(/databases/$(database)/documents/albums/$(albumId)/grants/$(request.auth.uid)).data.status == 'granted';
+      }
+
+      // ----- photos: the gated content -----
+      match /photos/{photoId} {
+        allow read: if isSignedIn()
+          && (request.auth.uid in albumData().ownerUids
+              || albumData().accessLevel == 'public-to-members'
+              || (albumData().accessLevel == 'connections' && connectedTo(albumData().ownerId))
+              || hasGrant());
+
+        allow create: if isSignedIn()
+          && request.auth.uid in albumData().ownerUids
+          && request.resource.data.url is string;
+        allow update: if false;
+        allow delete: if isSignedIn() && request.auth.uid in albumData().ownerUids;
+      }
+
+      // ----- grants: request → approve -----
+      match /grants/{granteeUid} {
+        allow get: if isSelf(granteeUid)
+          || (isSignedIn() && request.auth.uid in albumData().ownerUids);
+        allow list: if isSignedIn() && request.auth.uid in albumData().ownerUids;
+
+        // Members ask for themselves.
+        allow create: if isSelf(granteeUid)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.status == 'requested';
+
+        // Only the owner approves. Couple-owned albums with dual consent
+        // need BOTH partners' approval before status may become granted.
+        allow update: if isSignedIn()
+          && request.auth.uid in albumData().ownerUids
+          && request.resource.data.status in ['requested', 'granted']
+          && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'approvals'])
+          && grantApprovalOk();
+
+        function albumDualConsent() {
+          return albumData().ownerType == 'couple'
+            && 'dualConsent' in coupleData(albumData().ownerId)
+            && coupleData(albumData().ownerId).dualConsent.albums == true;
+        }
+
+        function grantApprovalOk() {
+          return request.resource.data.status == 'requested'
+            || !albumDualConsent()
+            || (('approvals' in request.resource.data)
+                && request.resource.data.approvals.keys()
+                   .hasAll(albumData().ownerUids));
+        }
+
+        // Owner revokes/denies; requester may withdraw.
+        allow delete: if isSelf(granteeUid)
+          || (isSignedIn() && request.auth.uid in albumData().ownerUids);
+      }
+    }
+
+    // ---------- blocks ----------
+    match /blocks/{blockId} {
+      // Only the blocker can see or manage their own blocks.
+      allow get, list: if isSignedIn() && resource.data.blockerId == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.blockerId == request.auth.uid
+        && blockId == request.auth.uid + '_' + request.resource.data.blockedId;
+      allow delete: if isSignedIn() && resource.data.blockerId == request.auth.uid;
+    }
+
+    // ---------- admins (provisioned outside the client) ----------
+    match /admins/{uid} {
+      // A member may check their own admin status; nothing else.
+      allow get: if isSelf(uid);
+      allow list, create, update, delete: if false;
+    }
+
+    // ---------- photo verifications ----------
+    match /verifications/{verificationId} {
+      // Subject sees their own submissions; admins see all.
+      allow get: if isAdmin()
+        || (isSignedIn() && request.auth.uid in resource.data.subjectUids);
+      allow list: if isAdmin()
+        || (isSignedIn() && request.auth.uid in resource.data.subjectUids);
+
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.subjectUids
+        && ((request.resource.data.subjectType == 'user'
+              && request.resource.data.subjectId == request.auth.uid
+              && request.resource.data.subjectUids == [request.auth.uid])
+            || (request.resource.data.subjectType == 'couple'
+              && request.resource.data.subjectUids == coupleData(request.resource.data.subjectId).partnerUids))
+        && request.resource.data.status == 'pending'
+        && request.resource.data.imagePath is string
+        && request.resource.data.code is string;
+
+      // Only admins move a submission out of pending.
+      allow update: if isAdmin()
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['status', 'reviewedBy', 'reviewedAt']);
+
+      allow delete: if isAdmin()
+        || (isSignedIn()
+            && request.auth.uid in resource.data.subjectUids
+            && resource.data.status == 'pending');
+    }
+
+    // ---------- groups ----------
+    match /groups/{groupId} {
+      function groupData() {
+        return get(/databases/$(database)/documents/groups/$(groupId)).data;
+      }
+      function isGroupMember() {
+        return exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+      }
+      function isGroupModerator() {
+        return isGroupMember()
+          && get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == 'moderator';
+      }
+
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.memberCount == 0;
+      allow update: if isSignedIn() && isGroupModerator()
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.memberCount == resource.data.memberCount;
+      allow delete: if isSignedIn() && isGroupModerator();
+
+      match /members/{memberUid} {
+        allow read: if isSignedIn();
+        // Join yourself as 'member'; the creator bootstraps as 'moderator'.
+        allow create: if isSelf(memberUid)
+          && request.resource.data.uid == request.auth.uid
+          && (request.resource.data.role == 'member'
+              || (request.resource.data.role == 'moderator'
+                  && groupData().createdBy == request.auth.uid));
+        allow update: if false;
+        // Leave, or be removed by a moderator.
+        allow delete: if isSelf(memberUid) || isGroupModerator();
+      }
+
+      match /posts/{postId} {
+        allow read: if isSignedIn() && isGroupMember();
+        allow create: if isSignedIn() && isGroupMember()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 1000;
+        allow update: if false;
+        allow delete: if isSignedIn()
+          && (resource.data.authorId == request.auth.uid || isGroupModerator());
+      }
+    }
+
+    // ---------- references (private member-to-member vouches) ----------
+    match /references/{referenceId} {
+      allow get, list: if isSignedIn();
+
+      // Allowed between connected entities, or after a shared event RSVP.
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.fromUids
+        && !(request.auth.uid in request.resource.data.toUids)
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 300
+        && (connectedTo(request.resource.data.toId) || sharedEventRsvp());
+
+      allow update: if false;
+      // Author may remove; the subject may remove abusive ones.
+      allow delete: if isSignedIn()
+        && (request.auth.uid in resource.data.fromUids
+            || request.auth.uid in resource.data.toUids
+            || isAdmin());
+
+      function sharedEventRsvp() {
+        return request.resource.data.eventId is string
+          && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId)/rsvps/$(request.auth.uid))
+          && exists(/databases/$(database)/documents/events/$(request.resource.data.eventId)/rsvps/$(request.resource.data.toUids[0]));
+      }
+    }
+
+    // ---------- travel plans ----------
+    match /travelPlans/{planId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.auth.uid in request.resource.data.ownerUids
+        && request.resource.data.city is string
+        && request.resource.data.city.size() >= 1
+        && request.resource.data.city.size() <= 80
+        && request.resource.data.startsAt is timestamp
+        && request.resource.data.endsAt is timestamp;
+      allow update, delete: if isSignedIn()
+        && request.auth.uid in resource.data.ownerUids;
+    }
+
+    // ---------- icebreaker prompt reactions ----------
+    match /promptReactions/{reactionId} {
+      // Only the recipient reads their reactions inbox.
+      allow get, list: if isSignedIn() && request.auth.uid in resource.data.toUids;
+      allow create: if isSignedIn()
+        && request.resource.data.fromId == request.auth.uid
+        && !(request.auth.uid in request.resource.data.toUids)
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 140;
+      allow update: if false;
+      allow delete: if isSignedIn()
+        && (request.auth.uid in resource.data.toUids
+            || resource.data.fromId == request.auth.uid);
+    }
+
+    // ---------- notifications (written only by Cloud Functions) ----------
+    match /notifications/{uid}/items/{notifId} {
+      allow get, list: if isSelf(uid);
+      allow create: if false;
+      // Owner may only flip the read flag.
+      allow update: if isSelf(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isSelf(uid);
+    }
+
+    // Anything not matched above is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
