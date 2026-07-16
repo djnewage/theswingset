@@ -108,7 +108,7 @@ const USERS = [
       { prompt: 'The most fun we’ve had at a party was…', answer: 'The blackout Uno tournament. Ask Riley.' },
       { prompt: 'Our non-negotiable is…', answer: 'Both of us in every conversation from the start.' },
     ],
-    messagePolicy: 'anyone',
+    messagePolicy: 'everyone',
     couple: 'sr',
   },
   {
@@ -120,7 +120,7 @@ const USERS = [
     interests: ['Games & game nights', 'Beach days', 'Travel'],
     boundaries: { playStyle: 'full', roomPreference: 'either', openTo: 'open-to-singles', smoking: 'socially', drinking: 'yes', boundariesText: '' },
     prompts: [{ prompt: 'You’ll win us over by…', answer: 'Bringing a game we haven’t played.' }],
-    messagePolicy: 'anyone',
+    messagePolicy: 'everyone',
     couple: 'sr',
   },
   {
@@ -160,7 +160,7 @@ const USERS = [
       { prompt: 'A perfect Saturday night looks like…', answer: 'Rooftop drinks, then whoever’s hosting.' },
       { prompt: 'Green flags we look for…', answer: 'Couples who like each other. You’d be surprised.' },
     ],
-    messagePolicy: 'anyone',
+    messagePolicy: 'everyone',
   },
   {
     email: 'test.marcus@example.com',

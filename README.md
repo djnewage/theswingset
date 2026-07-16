@@ -100,12 +100,26 @@ Work through `SMOKE-TEST.md` against the emulator suite before each deploy.
 
 ```
 src/
-  lib/            firebase init, age validation
-  components/     AppShell (tabs/sidebar), Logo, shared UI
+  lib/            firebase init, age validation, image re-encode, time utils
+  components/     AppShell (tabs/sidebar), Logo, Avatar, shared UI
   features/
     auth/         AgeGate, login/signup, Google DOB completion, route guards
-    profiles/     (Phase 2)
-    feed/         (Phase 3)
-    events/       (Phase 4)
-    discover/     (Phase 5)
+    profiles/     user + couple profiles, boundaries, couple linking
+    feed/         posts (members/connections/private audiences), likes,
+                  comments, shares, reports, blocks
+    messages/     DM threads (entity-to-entity, live), message policies
+    events/       events, RSVPs + waitlist, host tools, event chat
+    discover/     couples browse + boundary/verified filters
+    connections/  request → accept graph, dual consent
+    albums/       gated photo albums with grants
+    groups/       community groups with moderators
+    notifications/ function-written inbox + bell
+    verification/ photo verification queue (admin)
+    prompts/      icebreaker prompts + reactions
+    references/   member-to-member vouches
+    travel/       travel plans surfaced in Discover
+    discretion/   decoy screen, PIN lock, quick-hide
+    admin/        members, reports, verifications console
+
+scripts/          test-data seeding (see scripts/*.mjs headers)
 ```

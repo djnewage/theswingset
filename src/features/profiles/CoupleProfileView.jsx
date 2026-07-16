@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { fetchCouple, fetchUser } from './api'
 import { ConnectButton } from '../connections/ConnectButton'
+import { MessageButton } from '../messages/MessageButton'
 import { BoundariesCard } from './BoundariesCard'
 import { ReferencesSection } from '../references/ReferencesSection'
 import { AlbumsSection } from '../albums/AlbumsSection'
@@ -83,6 +84,7 @@ export function CoupleProfileView() {
                   photoURL: couple.coverPhotoURL,
                 }}
               />
+              <MessageButton couple={{ ...couple, id: couple.id }} />
               <div className="flex gap-3 text-xs text-charcoal-500">
                 <button onClick={() => setReporting(true)} className="hover:text-charcoal-300">
                   Report

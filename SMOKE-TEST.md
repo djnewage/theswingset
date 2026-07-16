@@ -93,6 +93,16 @@ C = a single) in separate browser profiles.
 - [ ] Reference: connected member leaves one; subject can remove; non-connected member is rejected by rules
 - [ ] Travel plan appears in Discover ("traveling to your area" when city matches your location)
 
+## Direct messages
+- [ ] Message button on a profile whose policy is "everyone" opens a thread; send/receive works live in two browsers
+- [ ] Policy gates: "connections only" profile shows disabled button to strangers (and rules reject a forged thread via console); connected member can message
+- [ ] "Couples only" policy rejects a single sender; "verified only" rejects unverified
+- [ ] Messaging a linked member opens a thread with their COUPLE (both partners see it and can reply)
+- [ ] Couple recipients gate on the couple doc's messagePolicy, not the partners' personal settings
+- [ ] Unread dot on the Messages tab; opening the thread clears it
+- [ ] Block after a thread exists: further messages from the blocked side are rejected
+- [ ] New message produces a notification for the other side, never the sender (requires deployed functions)
+
 ## Image moderation (staging project only — Vision is unavailable in the emulator)
 - [ ] Explicit image as profile photo → file deleted, `reports` doc created, uploader notified
 - [ ] Same image in a request-to-view album → stays up, no report

@@ -534,6 +534,140 @@ service cloud.firestore {
       }
     }
 
+    // ---------- direct message threads ----------
+    // Threads link two ENTITIES (user or couple), like connections. Doc ID
+    // is the sorted pair `${a}_${b}`; memberUids lists every human on both
+    // sides. A linked member always messages AS their couple, so partners
+    // share the inbox — no side-channels around a partner. The recipient's
+    // messagePolicy (connections / couples / verified / everyone) and blocks
+    // are enforced here at thread creation, and blocks again per message.
+    match /threads/{threadId} {
+      allow get: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+      // List queries must filter memberUids array-contains me.
+      allow list: if isSignedIn() && request.auth.uid in resource.data.memberUids;
+
+      allow create: if isSignedIn()
+        && request.resource.data.entityIds.size() == 2
+        && request.resource.data.entityIds[0] < request.resource.data.entityIds[1]
+        && threadId == request.resource.data.entityIds[0] + '_' + request.resource.data.entityIds[1]
+        && request.resource.data.createdBy in request.resource.data.entityIds
+        && request.resource.data.createdBy == myEntity()
+        && request.resource.data.entities.keys().hasOnly(request.resource.data.entityIds)
+        && validThreadEntity(request.resource.data.entityIds[0])
+        && validThreadEntity(request.resource.data.entityIds[1])
+        && memberUidsExact()
+        && !(request.auth.uid in senderCard(otherEntityId()).uids)
+        && recipientAccepts()
+        && recipientHasNotBlocked(request.resource.data.createdBy);
+
+      // Two member-only update shapes: the lastMessage bump on send, and
+      // one's OWN read receipt.
+      allow update: if isSignedIn()
+        && request.auth.uid in resource.data.memberUids
+        && ((request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['lastMessage', 'updatedAt']))
+            || (request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['lastReadAt'])
+                && request.resource.data.lastReadAt
+                   .diff(resource.data.lastReadAt)
+                   .affectedKeys().hasOnly([request.auth.uid])));
+
+      allow delete: if false;
+
+      function senderCard(entityId) {
+        return request.resource.data.entities[entityId];
+      }
+
+      function otherEntityId() {
+        return request.resource.data.createdBy == request.resource.data.entityIds[0]
+          ? request.resource.data.entityIds[1]
+          : request.resource.data.entityIds[0];
+      }
+
+      // Entity cards must mirror the real docs (type/uids can't be forged).
+      function validThreadEntity(entityId) {
+        return (senderCard(entityId).type == 'user' && senderCard(entityId).uids == [entityId])
+          || (senderCard(entityId).type == 'couple'
+              && senderCard(entityId).uids == coupleData(entityId).partnerUids);
+      }
+
+      function memberUidsExact() {
+        return request.resource.data.memberUids
+               .hasAll(senderCard(request.resource.data.entityIds[0]).uids)
+          && request.resource.data.memberUids
+             .hasAll(senderCard(request.resource.data.entityIds[1]).uids)
+          && request.resource.data.memberUids.size()
+             <= senderCard(request.resource.data.entityIds[0]).uids.size()
+                + senderCard(request.resource.data.entityIds[1]).uids.size();
+      }
+
+      function recipientDoc() {
+        return senderCard(otherEntityId()).type == 'couple'
+          ? coupleData(otherEntityId())
+          : get(/databases/$(database)/documents/users/$(otherEntityId())).data;
+      }
+
+      function senderVerified() {
+        return senderCard(request.resource.data.createdBy).type == 'couple'
+          ? coupleData(request.resource.data.createdBy).verified == true
+          : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.verified == true;
+      }
+
+      function recipientAccepts() {
+        let policy = 'messagePolicy' in recipientDoc() ? recipientDoc().messagePolicy : 'connections';
+        return policy == 'everyone'
+          || (policy == 'couples'
+              && senderCard(request.resource.data.createdBy).type == 'couple')
+          || (policy == 'verified' && senderVerified())
+          || (policy == 'connections' && connectedTo(otherEntityId()));
+      }
+
+      // Any human on the recipient side may have blocked the sender entity.
+      function recipientHasNotBlocked(senderEntityId) {
+        let rUids = senderCard(otherEntityId()).uids;
+        return !exists(/databases/$(database)/documents/blocks/$(rUids[0] + '_' + senderEntityId))
+          && (rUids.size() < 2
+              || !exists(/databases/$(database)/documents/blocks/$(rUids[1] + '_' + senderEntityId)));
+      }
+
+      // ----- messages -----
+      match /messages/{messageId} {
+        function threadData() {
+          return get(/databases/$(database)/documents/threads/$(threadId)).data;
+        }
+
+        function msgOtherUids() {
+          return request.resource.data.senderEntityId == threadData().entityIds[0]
+            ? threadData().entities[threadData().entityIds[1]].uids
+            : threadData().entities[threadData().entityIds[0]].uids;
+        }
+
+        // Blocks cut a conversation off even after the thread exists.
+        function notBlockedNow() {
+          let oUids = msgOtherUids();
+          return !exists(/databases/$(database)/documents/blocks/$(oUids[0] + '_' + request.resource.data.senderEntityId))
+            && (oUids.size() < 2
+                || !exists(/databases/$(database)/documents/blocks/$(oUids[1] + '_' + request.resource.data.senderEntityId)));
+        }
+
+        allow read: if isSignedIn() && request.auth.uid in threadData().memberUids;
+
+        allow create: if isSignedIn()
+          && request.auth.uid in threadData().memberUids
+          && request.resource.data.senderUid == request.auth.uid
+          && request.resource.data.senderEntityId in threadData().entityIds
+          && request.auth.uid
+             in threadData().entities[request.resource.data.senderEntityId].uids
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 1
+          && request.resource.data.text.size() <= 2000
+          && notBlockedNow();
+
+        allow update: if false;
+        allow delete: if isSignedIn() && resource.data.senderUid == request.auth.uid;
+      }
+    }
+
     // ---------- blocks ----------
     match /blocks/{blockId} {
       // Only the blocker can see or manage their own blocks.

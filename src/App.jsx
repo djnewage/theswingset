@@ -29,6 +29,8 @@ import { AdminPage } from './features/admin/AdminPage'
 import { GroupsPage } from './features/groups/GroupsPage'
 import { GroupPage } from './features/groups/GroupPage'
 import { TravelPage } from './features/travel/TravelPage'
+import { MessagesPage } from './features/messages/MessagesPage'
+import { ThreadPage } from './features/messages/ThreadPage'
 import { ReactionsPage } from './features/prompts/ReactionsPage'
 
 export default function App() {
@@ -52,6 +54,8 @@ export default function App() {
                   <Route path="post/:postId" element={<PostPage />} />
                   <Route path="discover" element={<DiscoverPage />} />
                   <Route path="connections" element={<ConnectionsPage />} />
+                  <Route path="messages" element={<MessagesPage />} />
+                  <Route path="messages/:threadId" element={<ThreadPage />} />
                   <Route path="notifications" element={<NotificationsPage />} />
                   <Route path="verify" element={<VerifyPage />} />
                   <Route path="settings/discretion" element={<DiscretionSettingsPage />} />

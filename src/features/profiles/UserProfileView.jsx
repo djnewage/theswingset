@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { fetchUser } from './api'
 import { ConnectButton } from '../connections/ConnectButton'
+import { MessageButton } from '../messages/MessageButton'
 import { BoundariesCard } from './BoundariesCard'
 import { PromptsCard } from '../prompts/PromptsCard'
 import { ReferencesSection } from '../references/ReferencesSection'
@@ -74,6 +75,7 @@ export function UserProfileView() {
             photoURL: member.photoURL,
           }}
         />
+        <MessageButton member={member} />
         <button onClick={() => setReporting(true)} className="text-xs text-charcoal-500 hover:text-charcoal-300">
           Report
         </button>

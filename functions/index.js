@@ -304,6 +304,24 @@ exports.adminSetUserDisabled = onCall(async (request) => {
   return { ok: true }
 })
 
+// ---------- direct message notifications ----------
+
+exports.onMessageCreated = onDocumentCreated('threads/{threadId}/messages/{messageId}', async (event) => {
+  const message = event.data?.data()
+  if (!message) return
+  const thread = (await db.doc(`threads/${event.params.threadId}`).get()).data()
+  if (!thread) return
+
+  const recipients = thread.memberUids.filter(
+    (uid) => !thread.entities[message.senderEntityId]?.uids?.includes(uid),
+  )
+  await notify(recipients, message.senderUid, {
+    type: 'message',
+    text: `${message.senderName} sent you a message`,
+    link: `/messages/${event.params.threadId}`,
+  })
+})
+
 // ---------- account deletion: full data wipe ----------
 
 exports.onUserDeleted = onDocumentDeleted('users/{uid}', async (event) => {
