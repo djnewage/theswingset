@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { fetchCouple, fetchUser } from './api'
@@ -10,6 +10,7 @@ import { AlbumsSection } from '../albums/AlbumsSection'
 import { ReportDialog } from '../feed/ReportDialog'
 import { useBlocks } from '../feed/useBlocks'
 import { Avatar } from '../../components/Avatar'
+import { monthYear } from '../../lib/time'
 
 export function CoupleProfileView() {
   const { coupleId } = useParams()
@@ -65,6 +66,11 @@ export function CoupleProfileView() {
             {couple.location && (
               <p className="mt-0.5 text-sm text-charcoal-400">📍 {couple.location}</p>
             )}
+            {couple.createdAt && (
+              <p className="mt-0.5 text-xs text-charcoal-500">
+                Members since {monthYear(couple.createdAt)}
+              </p>
+            )}
           </div>
           {!isMine && (
             <div className="flex shrink-0 flex-col items-end gap-2">
@@ -95,10 +101,14 @@ export function CoupleProfileView() {
         {partnerQueries.data?.length > 0 && (
           <div className="mt-4 flex gap-4">
             {partnerQueries.data.map((partner) => (
-              <div key={partner.id} className="flex items-center gap-2">
+              <Link
+                key={partner.id}
+                to={`/u/${partner.id}`}
+                className="flex items-center gap-2 rounded-full py-1 pr-3 pl-1 ring-1 ring-charcoal-800 transition hover:bg-charcoal-900 hover:ring-charcoal-700"
+              >
                 <Avatar src={partner.photoURL} name={partner.displayName} className="h-9 w-9 text-sm" />
                 <span className="text-sm text-charcoal-200">{partner.displayName}</span>
-              </div>
+              </Link>
             ))}
           </div>
         )}

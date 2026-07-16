@@ -11,6 +11,7 @@ import { AlbumsSection } from '../albums/AlbumsSection'
 import { ReportDialog } from '../feed/ReportDialog'
 import { useBlocks } from '../feed/useBlocks'
 import { Avatar } from '../../components/Avatar'
+import { monthYear } from '../../lib/time'
 
 export function UserProfileView() {
   const { uid } = useParams()
@@ -53,6 +54,11 @@ export function UserProfileView() {
             </h1>
             {member.location && (
               <p className="mt-0.5 text-sm text-charcoal-400">📍 {member.location}</p>
+            )}
+            {member.createdAt && (
+              <p className="mt-0.5 text-xs text-charcoal-500">
+                Member since {monthYear(member.createdAt)}
+              </p>
             )}
           </div>
         </div>
