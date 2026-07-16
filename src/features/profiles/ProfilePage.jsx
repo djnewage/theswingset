@@ -10,11 +10,13 @@ import { Avatar } from '../../components/Avatar'
 import { VISIBILITY_OPTIONS } from './constants'
 import { AlbumsSection } from '../albums/AlbumsSection'
 import { usePostableAuthors } from '../feed/useAuthor'
+import { usePendingRequests } from '../connections/usePendingRequests'
 import { isAdminUser } from '../verification/api'
 
 export function ProfilePage() {
   const { user, profile, signOut } = useAuth()
   const authors = usePostableAuthors()
+  const pendingRequests = usePendingRequests()
   const [deleteError, setDeleteError] = useState('')
 
   const deleteAccount = async () => {
@@ -136,8 +138,19 @@ export function ProfilePage() {
         to="/connections"
         className="mt-4 block rounded-2xl bg-charcoal-900 p-5 ring-1 ring-charcoal-800 transition hover:ring-charcoal-600"
       >
-        <p className="text-sm font-medium text-gold-400">Connections</p>
-        <p className="mt-0.5 text-sm text-charcoal-300">Requests, your circle, and blocking →</p>
+        <p className="flex items-center gap-2 text-sm font-medium text-gold-400">
+          Connections
+          {pendingRequests > 0 && (
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-gold-500 px-1.5 text-xs font-bold text-charcoal-950">
+              {pendingRequests}
+            </span>
+          )}
+        </p>
+        <p className="mt-0.5 text-sm text-charcoal-300">
+          {pendingRequests > 0
+            ? `${pendingRequests} request${pendingRequests === 1 ? '' : 's'} waiting for you →`
+            : 'Requests, your circle, and blocking →'}
+        </p>
       </Link>
 
       <Link

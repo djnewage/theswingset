@@ -1,15 +1,25 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { collection, limit, onSnapshot, query, where } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
 import { useAuth } from '../auth/AuthContext'
-import { hasUnread } from './api'
 
 export function NotificationsBell() {
   const { user } = useAuth()
-  const { data: unread = false } = useQuery({
-    queryKey: ['unread', user.uid],
-    queryFn: () => hasUnread(user.uid),
-    refetchInterval: 60_000,
-  })
+  const [unread, setUnread] = useState(false)
+
+  useEffect(
+    () =>
+      onSnapshot(
+        query(
+          collection(db, 'notifications', user.uid, 'items'),
+          where('read', '==', false),
+          limit(1),
+        ),
+        (snap) => setUnread(!snap.empty),
+      ),
+    [user.uid],
+  )
 
   return (
     <Link

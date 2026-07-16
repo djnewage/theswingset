@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { usePendingRequests } from '../features/connections/usePendingRequests'
 import { useUnreadMessages } from '../features/messages/useUnreadMessages'
 import { Logo } from './Logo'
 
@@ -8,13 +9,14 @@ const TABS = [
   { to: '/compose', label: 'Post', icon: PlusIcon, accent: true },
   { to: '/messages', label: 'Messages', icon: ChatIcon, dot: 'messages' },
   { to: '/events', label: 'Events', icon: CalendarIcon },
-  { to: '/profile', label: 'Profile', icon: UserIcon },
+  { to: '/profile', label: 'Profile', icon: UserIcon, dot: 'profile' },
 ]
 
 /** Mobile: bottom tab bar. Desktop (md+): left sidebar. */
 export function AppShell() {
   const unreadMessages = useUnreadMessages()
-  const dots = { messages: unreadMessages }
+  const pendingRequests = usePendingRequests()
+  const dots = { messages: unreadMessages, profile: pendingRequests > 0 }
 
   return (
     <div className="min-h-dvh bg-charcoal-950 md:flex">
