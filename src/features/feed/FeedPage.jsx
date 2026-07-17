@@ -100,7 +100,7 @@ export function FeedPage() {
 
       {!isPending && !isError && posts.length === 0 && (
         <div className="flex flex-col items-center px-6 pt-20 text-center">
-          <img src="/pineapple.svg" alt="" className="h-14 w-14 opacity-60" />
+          <img src={`${import.meta.env.BASE_URL}pineapple.svg`} alt="" className="h-14 w-14 opacity-60" />
           <h2 className="mt-4 text-lg font-semibold text-charcoal-50">It’s quiet here…</h2>
           <p className="mt-2 max-w-xs text-sm text-charcoal-400">
             Be the first to break the ice — share something with the community.

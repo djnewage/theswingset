@@ -15,7 +15,7 @@ export class ErrorBoundary extends Component {
     if (!this.state.error) return this.props.children
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center bg-charcoal-950 px-6 text-center">
-        <img src="/pineapple.svg" alt="" className="h-14 w-14 opacity-60" />
+        <img src={`${import.meta.env.BASE_URL}pineapple.svg`} alt="" className="h-14 w-14 opacity-60" />
         <h1 className="mt-4 text-xl font-semibold text-charcoal-50">
           Something went sideways
         </h1>

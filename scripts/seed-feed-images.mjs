@@ -32,7 +32,6 @@ import {
   uploadBytes,
 } from 'firebase/storage'
 
-const TEST_PASSWORD = 'SwingsetTest!23'
 
 const env = Object.fromEntries(
   readFileSync(new URL('../.env', import.meta.url), 'utf8')
@@ -43,6 +42,9 @@ const env = Object.fromEntries(
       return [l.slice(0, i).trim(), l.slice(i + 1).trim()]
     }),
 )
+
+const TEST_PASSWORD = env.TEST_PASSWORD
+if (!TEST_PASSWORD) throw new Error('Add TEST_PASSWORD to .env (test-account password)')
 
 const app = initializeApp({
   apiKey: env.VITE_FIREBASE_API_KEY,

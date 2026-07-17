@@ -4,7 +4,7 @@ import { useAuth } from './AuthContext'
 function FullScreenSpinner() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-charcoal-950">
-      <img src="/pineapple.svg" alt="Loading" className="h-12 w-12 animate-bounce" />
+      <img src={`${import.meta.env.BASE_URL}pineapple.svg`} alt="Loading" className="h-12 w-12 animate-bounce" />
     </div>
   )
 }

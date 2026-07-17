@@ -2,13 +2,13 @@
   "name": "Pina",
   "short_name": "Pina",
   "description": "Notes, lists, and plans.",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#121110",
   "theme_color": "#1c1b1a",
   "icons": [
     {
-      "src": "/pina.svg",
+      "src": "./pina.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

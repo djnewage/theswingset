@@ -21,7 +21,7 @@ export function MessagesPage() {
 
       {threads?.length === 0 && (
         <div className="flex flex-col items-center px-6 pt-16 text-center">
-          <img src="/pineapple.svg" alt="" className="h-14 w-14 opacity-60" />
+          <img src={`${import.meta.env.BASE_URL}pineapple.svg`} alt="" className="h-14 w-14 opacity-60" />
           <h2 className="mt-4 text-lg font-semibold text-charcoal-50">No conversations yet</h2>
           <p className="mt-2 max-w-xs text-sm text-charcoal-400">
             Open a profile and tap Message — or break the ice with a reaction

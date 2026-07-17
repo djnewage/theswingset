@@ -33,12 +33,15 @@ import { MessagesPage } from './features/messages/MessagesPage'
 import { ThreadPage } from './features/messages/ThreadPage'
 import { ReactionsPage } from './features/prompts/ReactionsPage'
 
+// '/theswingset' on GitHub Pages, '' everywhere else (BASE_URL ends with '/').
+const BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '')
+
 export default function App() {
   return (
     <DiscretionProvider>
       <AgeGate>
         <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename={BASENAME}>
           <Routes>
             <Route element={<RedirectIfAuthed />}>
               <Route path="/login" element={<LoginPage />} />

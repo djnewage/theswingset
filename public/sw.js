@@ -1,7 +1,9 @@
 /* Minimal service worker: cache the app shell, network-first for everything
  * else. User data is NEVER cached — privacy first. */
-const CACHE = 'swingset-v1'
-const SHELL = ['/', '/index.html', '/pineapple.svg', '/manifest.webmanifest']
+const CACHE = 'swingset-v2'
+// Relative URLs resolve against the SW's own location, so the same file works
+// at the domain root (Firebase Hosting) and under /theswingset/ (GitHub Pages).
+const SHELL = ['./', './index.html', './pineapple.svg', './manifest.webmanifest']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)))
@@ -27,7 +29,7 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request)
       .then((response) => {
         // Cache hashed build assets as they stream through.
-        if (response.ok && url.pathname.startsWith('/assets/')) {
+        if (response.ok && url.pathname.includes('/assets/')) {
           const copy = response.clone()
           caches.open(CACHE).then((cache) => cache.put(event.request, copy))
         }
@@ -37,7 +39,7 @@ self.addEventListener('fetch', (event) => {
         caches.match(event.request).then(
           (cached) =>
             cached ??
-            (event.request.mode === 'navigate' ? caches.match('/index.html') : Response.error()),
+            (event.request.mode === 'navigate' ? caches.match('./index.html') : Response.error()),
         ),
       ),
   )

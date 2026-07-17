@@ -61,7 +61,7 @@ function UpcomingList() {
   if (events.length === 0) {
     return (
       <div className="flex flex-col items-center pt-10 text-center">
-        <img src="/pineapple.svg" alt="" className="h-12 w-12 opacity-60" />
+        <img src={`${import.meta.env.BASE_URL}pineapple.svg`} alt="" className="h-12 w-12 opacity-60" />
         <p className="mt-3 max-w-xs text-sm text-charcoal-400">
           No upcoming events yet. Host the first play date, house party, or
           meetup in your area.
