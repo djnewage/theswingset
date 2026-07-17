@@ -5,6 +5,7 @@ import { db } from '../../lib/firebase'
 import { useAuth } from './AuthContext'
 import { isAdult, MIN_AGE } from '../../lib/age'
 import { createUserProfile } from './createUserProfile'
+import { consumeInvite, validateInvite } from './invites'
 import { AuthLayout, Field, SubmitButton } from './AuthLayout'
 
 /**
@@ -17,7 +18,9 @@ export function WelcomePage() {
   const navigate = useNavigate()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [dob, setDob] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [dobError, setDobError] = useState('')
+  const [inviteError, setInviteError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -30,6 +33,7 @@ export function WelcomePage() {
     e.preventDefault()
     setError('')
     setDobError('')
+    setInviteError('')
     if (!isAdult(dob)) {
       setDobError(`You must be at least ${MIN_AGE} to join.`)
       return
@@ -40,7 +44,14 @@ export function WelcomePage() {
       // overwrite it (rules forbid that) — just continue into the app.
       const existing = await getDoc(doc(db, 'users', user.uid))
       if (!existing.exists()) {
-        await createUserProfile(user.uid, { displayName, dob })
+        const invite = await validateInvite(inviteCode)
+        if (!invite.ok) {
+          setInviteError(invite.reason)
+          setBusy(false)
+          return
+        }
+        await createUserProfile(user.uid, { displayName, dob, inviteCode: invite.code })
+        await consumeInvite(invite.code)
       }
       navigate('/', { replace: true })
     } catch (err) {
@@ -75,6 +86,16 @@ export function WelcomePage() {
           value={dob}
           onChange={(e) => setDob(e.target.value)}
           error={dobError}
+          required
+        />
+        <Field
+          label="Invite code"
+          type="text"
+          value={inviteCode}
+          onChange={(e) => setInviteCode(e.target.value)}
+          placeholder="The Swingset is invite-only"
+          autoCapitalize="characters"
+          error={inviteError}
           required
         />
         {error && <p className="text-sm text-red-400">{error}</p>}

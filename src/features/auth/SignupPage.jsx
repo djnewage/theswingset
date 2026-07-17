@@ -8,6 +8,7 @@ import {
 import { auth, googleProvider } from '../../lib/firebase'
 import { isAdult, MIN_AGE } from '../../lib/age'
 import { createUserProfile } from './createUserProfile'
+import { consumeInvite, validateInvite } from './invites'
 import { AuthLayout, Field, GoogleButton, SubmitButton } from './AuthLayout'
 
 const FRIENDLY_ERRORS = {
@@ -23,9 +24,11 @@ export function SignupPage() {
     email: '',
     password: '',
     dob: '',
+    inviteCode: '',
   })
   const [error, setError] = useState('')
   const [dobError, setDobError] = useState('')
+  const [inviteError, setInviteError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
@@ -34,8 +37,15 @@ export function SignupPage() {
     e.preventDefault()
     setError('')
     setDobError('')
+    setInviteError('')
     if (!isAdult(form.dob)) {
       setDobError(`You must be at least ${MIN_AGE} to join.`)
+      return
+    }
+    // Validate the invite before creating any account.
+    const invite = await validateInvite(form.inviteCode)
+    if (!invite.ok) {
+      setInviteError(invite.reason)
       return
     }
     setBusy(true)
@@ -49,7 +59,9 @@ export function SignupPage() {
       await createUserProfile(cred.user.uid, {
         displayName: form.displayName,
         dob: form.dob,
+        inviteCode: invite.code,
       })
+      await consumeInvite(invite.code)
       navigate('/', { replace: true })
     } catch (err) {
       console.error('signup failed', err)
@@ -116,6 +128,16 @@ export function SignupPage() {
           value={form.dob}
           onChange={set('dob')}
           error={dobError}
+          required
+        />
+        <Field
+          label="Invite code"
+          type="text"
+          value={form.inviteCode}
+          onChange={set('inviteCode')}
+          placeholder="The Swingset is invite-only"
+          autoCapitalize="characters"
+          error={inviteError}
           required
         />
         {error && <p className="text-sm text-red-400">{error}</p>}

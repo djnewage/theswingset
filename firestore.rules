@@ -47,8 +47,40 @@ service cloud.firestore {
       return connAccepted(myEntity(), entityId) || connAccepted(entityId, myEntity());
     }
 
+    // ---------- invites ----------
+    // Invite-only signup. A doc's ID *is* the code. `get` is public so the
+    // signup form can validate a typed code before an account exists; `list`
+    // stays closed so codes can't be enumerated. Only admins mint codes; any
+    // signed-in user may burn a single use as they join.
+    match /invites/{code} {
+      allow get: if true;
+      allow list: if isAdmin();
+
+      allow create: if isAdmin()
+        && request.resource.data.active == true
+        && request.resource.data.useCount == 0
+        && request.resource.data.createdBy == request.auth.uid
+        && (request.resource.data.maxUses == null
+            || (request.resource.data.maxUses is int && request.resource.data.maxUses > 0));
+
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && resource.data.active == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['useCount'])
+            && request.resource.data.useCount == resource.data.useCount + 1);
+
+      allow delete: if isAdmin();
+    }
+
     // ---------- users ----------
     match /users/{uid} {
+      // Profile creation requires a real, active invite code (invite-only).
+      function hasValidInvite() {
+        return request.resource.data.inviteCode is string
+          && exists(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode))
+          && get(/databases/$(database)/documents/invites/$(request.resource.data.inviteCode)).data.active == true;
+      }
+
       // Visibility-narrowed reads: members-wide, connections-only, or
       // private (self + partner). Admins see all (moderation).
       allow get: if isSelf(uid)
@@ -70,6 +102,7 @@ service cloud.firestore {
         && request.resource.data.visibility == 'members'
         && request.resource.data.coupleId == null
         && request.resource.data.verified == false
+        && hasValidInvite()
         && validProfileFields();
 
       allow update: if (isSelf(uid)

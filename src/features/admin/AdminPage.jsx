@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { isAdminUser } from '../verification/api'
 import { VerificationQueue } from '../verification/AdminVerificationsPage'
+import { createInvite, listInvites, setInviteActive } from '../auth/invites'
 import {
   fetchAllUsers,
   fetchReports,
@@ -15,7 +16,7 @@ import {
 import { Avatar } from '../../components/Avatar'
 import { timeAgo } from '../../lib/time'
 
-const TABS = ['Members', 'Reports', 'Verifications']
+const TABS = ['Members', 'Reports', 'Verifications', 'Invites']
 
 export function AdminPage() {
   const { user } = useAuth()
@@ -41,7 +42,7 @@ export function AdminPage() {
     <div className="px-4 pt-6 pb-10">
       <h1 className="mb-4 text-xl font-semibold text-charcoal-50">Admin</h1>
 
-      <div className="mb-5 grid grid-cols-3 gap-2 rounded-2xl bg-charcoal-900 p-1 ring-1 ring-charcoal-700">
+      <div className="mb-5 grid grid-cols-4 gap-2 rounded-2xl bg-charcoal-900 p-1 ring-1 ring-charcoal-700">
         {TABS.map((t) => (
           <button
             key={t}
@@ -58,6 +59,119 @@ export function AdminPage() {
       {tab === 'Members' && <MembersTab />}
       {tab === 'Reports' && <ReportsTab />}
       {tab === 'Verifications' && <VerificationQueue />}
+      {tab === 'Invites' && <InvitesTab />}
+    </div>
+  )
+}
+
+// ---------- invites ----------
+
+function InvitesTab() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const [note, setNote] = useState('')
+  const [maxUses, setMaxUses] = useState('')
+  const [copied, setCopied] = useState('')
+
+  const { data: invites = [], isPending } = useQuery({
+    queryKey: ['invites'],
+    queryFn: listInvites,
+  })
+
+  const create = useMutation({
+    mutationFn: () => createInvite(user.uid, { note, maxUses: maxUses || null }),
+    onSuccess: () => {
+      setNote('')
+      setMaxUses('')
+      queryClient.invalidateQueries({ queryKey: ['invites'] })
+    },
+  })
+
+  const toggle = useMutation({
+    mutationFn: ({ code, active }) => setInviteActive(code, active),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['invites'] }),
+  })
+
+  const copy = (code) => {
+    navigator.clipboard?.writeText(code).then(() => {
+      setCopied(code)
+      setTimeout(() => setCopied(''), 1500)
+    })
+  }
+
+  return (
+    <div>
+      <div className="rounded-2xl bg-charcoal-900 p-4 ring-1 ring-charcoal-800">
+        <p className="text-sm font-semibold text-charcoal-100">Create an invite code</p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Note (e.g. “for Sarah”)"
+            maxLength={80}
+            className="h-11 flex-1 rounded-2xl border border-charcoal-600 bg-charcoal-800 px-4 text-sm text-charcoal-50 placeholder-charcoal-400 outline-none focus:border-gold-500"
+          />
+          <input
+            value={maxUses}
+            onChange={(e) => setMaxUses(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="Max uses (blank = ∞)"
+            inputMode="numeric"
+            className="h-11 rounded-2xl border border-charcoal-600 bg-charcoal-800 px-4 text-sm text-charcoal-50 placeholder-charcoal-400 outline-none focus:border-gold-500 sm:w-40"
+          />
+          <button
+            onClick={() => create.mutate()}
+            disabled={create.isPending}
+            className="h-11 rounded-2xl bg-gold-500 px-5 text-sm font-semibold text-charcoal-950 hover:bg-gold-400 disabled:opacity-50"
+          >
+            {create.isPending ? 'Creating…' : 'Generate'}
+          </button>
+        </div>
+      </div>
+
+      {isPending && <p className="py-8 text-center text-sm text-charcoal-500">Loading codes…</p>}
+
+      <div className="mt-4 flex flex-col gap-2">
+        {invites.map((inv) => {
+          const usedUp = inv.maxUses != null && (inv.useCount ?? 0) >= inv.maxUses
+          return (
+            <div
+              key={inv.code}
+              className={`flex items-center gap-3 rounded-2xl bg-charcoal-900 p-3.5 ring-1 ${
+                inv.active && !usedUp ? 'ring-charcoal-800' : 'ring-charcoal-800 opacity-60'
+              }`}
+            >
+              <button
+                onClick={() => copy(inv.code)}
+                className="rounded-lg bg-charcoal-800 px-3 py-1.5 font-mono text-sm font-semibold tracking-wider text-gold-400 ring-1 ring-charcoal-600 hover:bg-charcoal-700"
+                title="Copy code"
+              >
+                {copied === inv.code ? 'Copied!' : inv.code}
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-charcoal-200">{inv.note || <span className="text-charcoal-500">No note</span>}</p>
+                <p className="text-xs text-charcoal-400">
+                  {inv.useCount ?? 0}
+                  {inv.maxUses != null ? ` / ${inv.maxUses}` : ''} used
+                  {' · '}
+                  {usedUp ? 'used up' : inv.active ? 'active' : 'disabled'}
+                </p>
+              </div>
+              <button
+                onClick={() => toggle.mutate({ code: inv.code, active: !inv.active })}
+                disabled={toggle.isPending}
+                className="h-8 rounded-lg bg-charcoal-800 px-3 text-xs font-semibold text-charcoal-200 ring-1 ring-charcoal-600 hover:bg-charcoal-700 disabled:opacity-50"
+              >
+                {inv.active ? 'Disable' : 'Enable'}
+              </button>
+            </div>
+          )
+        })}
+        {!isPending && invites.length === 0 && (
+          <p className="py-8 text-center text-sm text-charcoal-500">
+            No invite codes yet — generate one above.
+          </p>
+        )}
+      </div>
     </div>
   )
 }

@@ -4,8 +4,10 @@ import { db } from '../../lib/firebase'
 /**
  * Creates the users/{uid} document after signup or first Google sign-in.
  * dob is a "YYYY-MM-DD" string; caller must have already validated 18+.
+ * inviteCode is a validated, active invite code — required by security rules
+ * (invite-only community); it's stored for audit and is immutable afterward.
  */
-export async function createUserProfile(uid, { displayName, dob }) {
+export async function createUserProfile(uid, { displayName, dob, inviteCode }) {
   await setDoc(doc(db, 'users', uid), {
     displayName,
     firstName: '',
@@ -21,6 +23,7 @@ export async function createUserProfile(uid, { displayName, dob }) {
     boundaries: null,
     messagePolicy: 'connections', // safest default for message gating
     prompts: [],
+    inviteCode: inviteCode ?? null,
     createdAt: serverTimestamp(),
   })
 }
