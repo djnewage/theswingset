@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
-import { deletePost, hasLiked, likePost, unlikePost } from './api'
+import { deletePost, fetchPost, hasLiked, likePost, unlikePost } from './api'
 import { useBlocks } from './useBlocks'
 import { ReportDialog } from './ReportDialog'
 import { Avatar } from '../../components/Avatar'
@@ -101,17 +101,13 @@ export function PostCard({ post, onShare }) {
         </Menu>
       </div>
 
-      {post.sharedFrom && (
-        <p className="mt-2 text-xs text-charcoal-400">
-          ↻ Shared from <span className="font-medium text-charcoal-300">{post.sharedFrom.authorName}</span>
-        </p>
-      )}
-
       {post.text && (
         <Link to={`/post/${post.id}`} className="mt-2 block whitespace-pre-wrap text-[15px] leading-6 text-charcoal-100">
           {post.text}
         </Link>
       )}
+
+      {post.sharedFrom && <SharedPostEmbed sharedFrom={post.sharedFrom} />}
 
       {post.imageURLs?.length > 0 && (
         <div className={`mt-3 grid gap-1.5 overflow-hidden rounded-2xl ${post.imageURLs.length > 1 ? 'grid-cols-2' : ''}`}>
@@ -152,5 +148,59 @@ export function PostCard({ post, onShare }) {
         targetId={post.id}
       />
     </article>
+  )
+}
+
+/**
+ * Quoted original inside a repost. Fetched live rather than denormalized so
+ * deletions and visibility rules keep applying — a stored copy would keep
+ * showing content after its author removed it or to people it excludes.
+ */
+function SharedPostEmbed({ sharedFrom }) {
+  const { data: original, isPending } = useQuery({
+    queryKey: ['post', sharedFrom.postId],
+    queryFn: () => fetchPost(sharedFrom.postId).catch(() => null),
+  })
+
+  if (isPending) {
+    return <div className="mt-3 h-20 animate-pulse rounded-2xl bg-charcoal-900 ring-1 ring-charcoal-800" />
+  }
+
+  if (!original) {
+    return (
+      <div className="mt-3 rounded-2xl bg-charcoal-900 px-4 py-3 ring-1 ring-charcoal-800">
+        <p className="text-sm text-charcoal-500">
+          ↻ Shared from {sharedFrom.authorName} — this post is no longer available.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      to={`/post/${original.id}`}
+      className="mt-3 block overflow-hidden rounded-2xl bg-charcoal-900 ring-1 ring-charcoal-700 transition hover:ring-charcoal-500"
+    >
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-charcoal-500">↻</span>
+          <Avatar src={original.authorPhotoURL} name={original.authorName} className="h-6 w-6 text-xs" />
+          <p className="truncate text-sm font-semibold text-charcoal-100">{original.authorName}</p>
+          <p className="shrink-0 text-xs text-charcoal-500">{timeAgo(original.createdAt)}</p>
+        </div>
+        {original.text && (
+          <p className="mt-1.5 line-clamp-4 whitespace-pre-wrap text-sm text-charcoal-200">
+            {original.text}
+          </p>
+        )}
+      </div>
+      {original.imageURLs?.length > 0 && (
+        <div className={`grid gap-px ${original.imageURLs.length > 1 ? 'grid-cols-2' : ''}`}>
+          {original.imageURLs.slice(0, 2).map((url) => (
+            <img key={url} src={url} alt="" loading="lazy" className="max-h-64 w-full object-cover" />
+          ))}
+        </div>
+      )}
+    </Link>
   )
 }
