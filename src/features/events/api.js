@@ -3,6 +3,7 @@ import {
   collection,
   collectionGroup,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -40,7 +41,9 @@ export async function createEvent(host, form) {
     hostName: host.name,
     title: form.title,
     description: form.description,
-    locationText: form.locationText, // shown only to attendees pre-RSVP? v1: all viewers
+    // Exact address lives in the private/location subdoc (rules restrict it
+    // to host + "going" guests); the public doc only says whether one exists.
+    hasExactLocation: !!form.locationText,
     geoArea: form.geoArea, // city/region for browsing
     startsAt: Timestamp.fromDate(new Date(form.startsAt)),
     endsAt: form.endsAt ? Timestamp.fromDate(new Date(form.endsAt)) : null,
@@ -53,7 +56,33 @@ export async function createEvent(host, form) {
     interestedCount: 0,
     createdAt: serverTimestamp(),
   })
+  if (form.locationText) {
+    await setDoc(doc(db, 'events', eventRef.id, 'private', 'location'), {
+      locationText: form.locationText,
+    })
+  }
   return eventRef.id
+}
+
+/** Exact address — null when the viewer isn't host or a confirmed guest. */
+export async function fetchEventLocation(eventId) {
+  try {
+    const snap = await getDoc(doc(db, 'events', eventId, 'private', 'location'))
+    return snap.exists() ? snap.data().locationText : null
+  } catch (err) {
+    if (err.code === 'permission-denied') return null
+    throw err
+  }
+}
+
+/** Legacy events kept the address on the public doc — host's client moves it
+ * into the gated subdoc the next time they open the event. */
+export async function migrateEventLocation(eventId, locationText) {
+  await setDoc(doc(db, 'events', eventId, 'private', 'location'), { locationText })
+  await updateDoc(doc(db, 'events', eventId), {
+    locationText: deleteField(),
+    hasExactLocation: true,
+  })
 }
 
 export async function updateEvent(eventId, patch) {

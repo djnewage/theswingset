@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
@@ -7,10 +7,12 @@ import {
   fetchAllRsvps,
   fetchAttendees,
   fetchEvent,
+  fetchEventLocation,
   fetchEventMessages,
   fetchMyRsvp,
   goingStatusFor,
   hostSetRsvpStatus,
+  migrateEventLocation,
   sendEventMessage,
   setRsvp,
 } from './api'
@@ -38,6 +40,25 @@ export function EventPage() {
     queryKey: ['attendees', eventId],
     queryFn: () => fetchAttendees(eventId),
   })
+  const canSeeAddress =
+    !!event && (event.hostUids?.includes(user.uid) || myRsvp?.status === 'going')
+  const { data: privateAddress } = useQuery({
+    queryKey: ['eventLocation', eventId, canSeeAddress],
+    queryFn: () => fetchEventLocation(eventId),
+    enabled: canSeeAddress,
+  })
+
+  // One-shot migration: legacy events carried the address on the public doc.
+  useEffect(() => {
+    if (event?.locationText && event.hostUids?.includes(user.uid)) {
+      migrateEventLocation(eventId, event.locationText)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['event', eventId] })
+          queryClient.invalidateQueries({ queryKey: ['eventLocation', eventId] })
+        })
+        .catch(() => {}) // non-fatal; retried on next visit
+    }
+  }, [event, eventId, user.uid, queryClient])
 
   const invalidateRsvps = () => {
     queryClient.invalidateQueries({ queryKey: ['rsvp', eventId, user.uid] })
@@ -111,14 +132,33 @@ export function EventPage() {
         </div>
 
         <p className="mt-2 text-sm text-charcoal-300">📍 {event.geoArea}</p>
-        {event.locationText && (myRsvp?.status === 'going' || isHost) && (
-          <p className="mt-1 rounded-xl bg-charcoal-900 px-3 py-2 text-sm text-charcoal-200 ring-1 ring-gold-700/40">
-            🔑 {event.locationText}
-          </p>
-        )}
-        {event.locationText && myRsvp?.status !== 'going' && !isHost && (
-          <p className="mt-1 text-xs text-charcoal-500">Exact location is shared once you RSVP “going.”</p>
-        )}
+        {(() => {
+          const address = privateAddress ?? event.locationText // legacy fallback
+          const hasAddress = event.hasExactLocation || !!event.locationText
+          if (address && canSeeAddress) {
+            return (
+              <div className="mt-1 flex items-center justify-between gap-3 rounded-xl bg-charcoal-900 px-3 py-2 ring-1 ring-gold-700/40">
+                <p className="min-w-0 text-sm text-charcoal-200">🔑 {address}</p>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0 rounded-lg bg-charcoal-800 px-3 py-1.5 text-xs font-semibold text-gold-400 ring-1 ring-charcoal-600 hover:bg-charcoal-700"
+                >
+                  Open in Maps ↗
+                </a>
+              </div>
+            )
+          }
+          if (hasAddress && !canSeeAddress) {
+            return (
+              <p className="mt-1 text-xs text-charcoal-500">
+                Exact location is shared once you RSVP “going.”
+              </p>
+            )
+          }
+          return null
+        })()}
 
         {event.description && (
           <p className="mt-4 whitespace-pre-wrap text-[15px] leading-6 text-charcoal-100">

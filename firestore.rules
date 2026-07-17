@@ -300,6 +300,29 @@ service cloud.firestore {
 
       allow delete: if isSignedIn() && isHost();
 
+      // ----- private details (exact address) -----
+      // Server-enforced: only the host and confirmed ("going") guests can
+      // read. The public event doc carries only the coarse geoArea.
+      match /private/{docId} {
+        function eventHostUids() {
+          return get(/databases/$(database)/documents/events/$(eventId)).data.hostUids;
+        }
+        function isGoing() {
+          return exists(/databases/$(database)/documents/events/$(eventId)/rsvps/$(request.auth.uid))
+            && get(/databases/$(database)/documents/events/$(eventId)/rsvps/$(request.auth.uid)).data.status == 'going';
+        }
+
+        allow get: if isSignedIn()
+          && (request.auth.uid in eventHostUids() || isGoing());
+
+        allow create, update: if isSignedIn()
+          && request.auth.uid in eventHostUids()
+          && request.resource.data.locationText is string
+          && request.resource.data.locationText.size() <= 200;
+
+        allow delete: if isSignedIn() && request.auth.uid in eventHostUids();
+      }
+
       // ----- RSVPs -----
       match /rsvps/{attendeeId} {
         function eventData() {

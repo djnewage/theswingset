@@ -106,11 +106,11 @@ export function EventFormPage() {
           required
         />
         <Field
-          label="Exact location details (shared with attendees)"
+          label="Exact location details (only hosts + confirmed guests see this)"
           value={form.locationText}
           onChange={set('locationText')}
           maxLength={200}
-          placeholder="Address or venue — kept off the public card"
+          placeholder="Address or venue — hidden until someone RSVPs “going”"
         />
 
         <div className="grid grid-cols-2 gap-3">
