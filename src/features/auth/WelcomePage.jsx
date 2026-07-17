@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
@@ -13,13 +13,18 @@ import { AuthLayout, Field, SubmitButton } from './AuthLayout'
  * access is granted — until an 18+ DOB is provided.
  */
 export function WelcomePage() {
-  const { user, signOut } = useAuth()
+  const { user, profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [dob, setDob] = useState('')
   const [dobError, setDobError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  // Already onboarded (e.g. landed here from a redirect race): straight in.
+  useEffect(() => {
+    if (profile) navigate('/', { replace: true })
+  }, [profile, navigate])
 
   const submit = async (e) => {
     e.preventDefault()

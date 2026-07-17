@@ -21,13 +21,17 @@ export function AuthProvider({ children }) {
     return onAuthStateChanged(auth, (u) => {
       setUser(u)
       setAuthReady(true)
+      // Flip profileReady in the SAME render as the user change — the
+      // snapshot subscription only starts in the effect below (post-render),
+      // and a gap where loading=false with profile still null bounces
+      // returning users to /welcome.
+      setProfileReady(!u)
       if (!u) setProfile(null)
     })
   }, [])
 
   useEffect(() => {
     if (!user) return undefined
-    setProfileReady(false)
     const unsub = onSnapshot(
       doc(db, 'users', user.uid),
       (snap) => {
