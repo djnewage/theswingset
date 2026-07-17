@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { fetchCouplesPage } from './api'
+import { fetchUpcomingEvents } from '../events/api'
 import { fetchUpcomingTravel, travelDates } from '../travel/api'
 import { LOOKING_FOR } from '../profiles/constants'
 import { BOUNDARY_FIELDS } from '../profiles/boundaries'
@@ -73,7 +74,7 @@ export function DiscoverPage() {
         className="mb-3 h-11 w-full rounded-2xl border border-charcoal-600 bg-charcoal-800 px-4 text-sm text-charcoal-50 placeholder-charcoal-400 outline-none focus:border-gold-500"
       />
 
-      <div className="-mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1">
+      <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1">
         <FilterChip active={!lookingFor} onClick={() => setLookingFor(null)}>
           Everyone
         </FilterChip>
@@ -123,6 +124,8 @@ export function DiscoverPage() {
         </div>
       )}
 
+      <UpcomingEventsSection />
+
       <TravelingSection myLocation={profile.location} />
 
       {isPending && <p className="py-10 text-center text-sm text-charcoal-500">Finding couples…</p>}
@@ -137,7 +140,7 @@ export function DiscoverPage() {
       )}
 
       {/* Swipeable on mobile via scroll-snap; grid on desktop. */}
-      <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0">
+      <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0">
         {couples.map((couple) => (
           <CoupleCard key={couple.id} couple={couple} />
         ))}
@@ -153,6 +156,60 @@ export function DiscoverPage() {
         </button>
       )}
     </div>
+  )
+}
+
+/** Horizontal strip of the next few members-visible events. */
+function UpcomingEventsSection() {
+  const { data } = useQuery({
+    queryKey: ['discoverEvents'],
+    queryFn: () => fetchUpcomingEvents(null),
+  })
+  const events = (data?.events ?? []).slice(0, 6)
+
+  if (events.length === 0) return null
+
+  return (
+    <section className="mb-5">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-charcoal-400">
+          Upcoming events
+        </h2>
+        <Link to="/events" className="text-xs font-medium text-gold-400 hover:text-gold-300">
+          See all →
+        </Link>
+      </div>
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        {events.map((e) => {
+          const d = e.startsAt.toDate()
+          return (
+            <Link
+              key={e.id}
+              to={`/events/${e.id}`}
+              className="w-60 shrink-0 rounded-2xl bg-charcoal-900 p-3 ring-1 ring-charcoal-800 hover:ring-gold-600/60"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-charcoal-800 text-gold-400">
+                  <span className="text-base font-bold leading-4">{d.getDate()}</span>
+                  <span className="text-[10px] uppercase">
+                    {d.toLocaleDateString(undefined, { month: 'short' })}
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-charcoal-50">{e.title}</p>
+                  <p className="truncate text-xs text-charcoal-400">
+                    📍 {e.geoArea}
+                    {' · '}
+                    {d.toLocaleDateString(undefined, { weekday: 'short' })}{' '}
+                    {d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+            </Link>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -177,7 +234,7 @@ function TravelingSection({ myLocation }) {
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-charcoal-400">
         {local.length > 0 ? 'Traveling to your area' : 'On the move'}
       </h2>
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
         {shown.map((t) => (
           <Link
             key={t.id}
