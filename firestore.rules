@@ -736,9 +736,13 @@ service cloud.firestore {
 
     // ---------- admins (provisioned outside the client) ----------
     match /admins/{uid} {
-      // A member may check their own admin status; nothing else.
-      allow get: if isSelf(uid);
-      allow list, create, update, delete: if false;
+      // A member may check their own admin status; admins manage the roster
+      // (grant/revoke). The very first admin is still provisioned out-of-band
+      // (console / Admin SDK) — this only lets existing admins add more.
+      allow get: if isSelf(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if false;
     }
 
     // ---------- photo verifications ----------

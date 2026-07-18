@@ -10,6 +10,7 @@ import { PromptsCard } from '../prompts/PromptsCard'
 import { ReferencesSection } from '../references/ReferencesSection'
 import { AlbumsSection } from '../albums/AlbumsSection'
 import { ReportDialog } from '../feed/ReportDialog'
+import { AuthorPosts } from '../feed/AuthorPosts'
 import { useBlocks } from '../feed/useBlocks'
 import { Avatar } from '../../components/Avatar'
 import { monthYear } from '../../lib/time'
@@ -104,6 +105,8 @@ export function UserProfileView() {
       )}
 
       <BoundariesCard boundaries={member.boundaries} />
+
+      <AuthorPosts authorId={uid} heading={`${member.displayName}'s posts`} />
 
       <PromptsCard
         prompts={member.prompts}

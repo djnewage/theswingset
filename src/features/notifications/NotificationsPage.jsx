@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { useDiscretion } from '../discretion/DiscretionProvider'
@@ -18,6 +18,7 @@ export function NotificationsPage() {
   const { user } = useAuth()
   const { settings } = useDiscretion()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const { data: notifications = [], isPending } = useQuery({
     queryKey: ['notifications', user.uid],
@@ -35,7 +36,16 @@ export function NotificationsPage() {
 
   return (
     <div className="px-4 pt-6 pb-8">
-      <h1 className="mb-4 text-xl font-semibold text-charcoal-50">Notifications</h1>
+      <div className="mb-4 flex items-center gap-2">
+        <button
+          onClick={() => navigate(-1)}
+          className="-ml-2 flex h-9 w-9 items-center justify-center rounded-full text-charcoal-300 hover:bg-charcoal-800"
+          aria-label="Back"
+        >
+          ←
+        </button>
+        <h1 className="text-xl font-semibold text-charcoal-50">Notifications</h1>
+      </div>
 
       {isPending && <p className="py-10 text-center text-sm text-charcoal-500">Loading…</p>}
 

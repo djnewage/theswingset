@@ -9,6 +9,7 @@ import { BoundariesCard } from './BoundariesCard'
 import { ReferencesSection } from '../references/ReferencesSection'
 import { AlbumsSection } from '../albums/AlbumsSection'
 import { ReportDialog } from '../feed/ReportDialog'
+import { AuthorPosts } from '../feed/AuthorPosts'
 import { useBlocks } from '../feed/useBlocks'
 import { Avatar } from '../../components/Avatar'
 import { monthYear } from '../../lib/time'
@@ -137,6 +138,8 @@ export function CoupleProfileView() {
         )}
 
         <BoundariesCard boundaries={couple.boundaries} />
+
+        <AuthorPosts authorId={coupleId} heading={`${couple.coupleName}'s posts`} />
 
         <AlbumsSection ownerId={coupleId} />
 

@@ -4,6 +4,7 @@ import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { deletePost, fetchPost, hasLiked, likePost, unlikePost } from './api'
+import { useAuthorPhoto } from './useAuthor'
 import { useBlocks } from './useBlocks'
 import { ReportDialog } from './ReportDialog'
 import { Avatar } from '../../components/Avatar'
@@ -17,6 +18,11 @@ export function PostCard({ post, onShare }) {
   const [reporting, setReporting] = useState(false)
 
   const isMine = post.authorUids?.includes(user.uid)
+  const authorPhoto = useAuthorPhoto({
+    authorType: post.authorType,
+    authorId: post.authorId,
+    authorPhotoURL: post.authorPhotoURL,
+  })
 
   // ---- like state (optimistic) ----
   const { data: liked = false } = useQuery({
@@ -52,7 +58,7 @@ export function PostCard({ post, onShare }) {
     <article className="border-b border-charcoal-800 px-4 py-4">
       <div className="flex items-center gap-3">
         <Link to={post.authorType === 'couple' ? `/c/${post.authorId}` : `/u/${post.authorId}`}>
-          <Avatar src={post.authorPhotoURL} name={post.authorName} className="h-10 w-10 text-base" />
+          <Avatar src={authorPhoto} name={post.authorName} className="h-10 w-10 text-base" />
         </Link>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-charcoal-50">

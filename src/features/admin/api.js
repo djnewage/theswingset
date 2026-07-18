@@ -1,11 +1,13 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   limit,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore'
@@ -41,6 +43,26 @@ export async function setUserBanned(uid, banned) {
 
 export async function setUserVerified(uid, verified) {
   await updateDoc(doc(db, 'users', uid), { verified })
+}
+
+// ---------- admin roster ----------
+
+/** UIDs that currently hold admin (moderator) access. */
+export async function fetchAdminUids() {
+  const snap = await getDocs(collection(db, 'admins'))
+  return snap.docs.map((d) => d.id)
+}
+
+/** Grant or revoke admin. Only existing admins can call this (enforced in rules). */
+export async function setAdmin(uid, makeAdmin, grantedByUid) {
+  if (makeAdmin) {
+    await setDoc(doc(db, 'admins', uid), {
+      grantedBy: grantedByUid,
+      grantedAt: serverTimestamp(),
+    })
+  } else {
+    await deleteDoc(doc(db, 'admins', uid))
+  }
 }
 
 // ---------- reports ----------

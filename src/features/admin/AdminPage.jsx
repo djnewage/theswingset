@@ -6,9 +6,11 @@ import { isAdminUser } from '../verification/api'
 import { VerificationQueue } from '../verification/AdminVerificationsPage'
 import { createInvite, listInvites, setInviteActive } from '../auth/invites'
 import {
+  fetchAdminUids,
   fetchAllUsers,
   fetchReports,
   reportTargetLink,
+  setAdmin,
   setUserBanned,
   setUserVerified,
   updateReportStatus,
@@ -179,6 +181,7 @@ function InvitesTab() {
 // ---------- members ----------
 
 function MembersTab() {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [notice, setNotice] = useState('')
@@ -186,6 +189,19 @@ function MembersTab() {
   const { data: users = [], isPending } = useQuery({
     queryKey: ['adminUsers'],
     queryFn: fetchAllUsers,
+  })
+  const { data: adminUids = [] } = useQuery({
+    queryKey: ['adminUids'],
+    queryFn: fetchAdminUids,
+  })
+  const adminSet = new Set(adminUids)
+
+  const toggleAdmin = useMutation({
+    mutationFn: ({ uid, makeAdmin }) => setAdmin(uid, makeAdmin, user.uid),
+    onSuccess: (_r, { makeAdmin }) => {
+      queryClient.invalidateQueries({ queryKey: ['adminUids'] })
+      setNotice(makeAdmin ? 'Admin access granted.' : 'Admin access removed.')
+    },
   })
 
   const ban = useMutation({
@@ -243,6 +259,11 @@ function MembersTab() {
                 <p className="truncate text-sm font-semibold text-charcoal-50">
                   {u.displayName}
                   {u.verified && <span className="ml-1 text-gold-400">✓</span>}
+                  {adminSet.has(u.id) && (
+                    <span className="ml-1.5 rounded-full bg-gold-500/15 px-2 py-0.5 text-[10px] font-semibold text-gold-400">
+                      ADMIN
+                    </span>
+                  )}
                   {u.banned && (
                     <span className="ml-1.5 rounded-full bg-red-950 px-2 py-0.5 text-[10px] font-semibold text-red-400">
                       BANNED
@@ -262,6 +283,27 @@ function MembersTab() {
                   Un-verify
                 </button>
               )}
+              {(() => {
+                const isThem = adminSet.has(u.id)
+                const isSelf = u.id === user.uid
+                return (
+                  <button
+                    onClick={() => {
+                      const verb = isThem ? 'Remove admin from' : 'Make admin'
+                      const msg = isSelf && isThem
+                        ? 'Remove your OWN admin access? You will lose the admin console immediately.'
+                        : `${verb} ${u.displayName}?`
+                      if (window.confirm(msg)) {
+                        toggleAdmin.mutate({ uid: u.id, makeAdmin: !isThem })
+                      }
+                    }}
+                    disabled={toggleAdmin.isPending}
+                    className="h-8 rounded-lg bg-charcoal-800 px-2.5 text-xs font-semibold text-charcoal-200 ring-1 ring-charcoal-600 hover:bg-charcoal-700 disabled:opacity-50"
+                  >
+                    {isThem ? 'Remove admin' : 'Make admin'}
+                  </button>
+                )
+              })()}
               <button
                 onClick={() => {
                   const verb = u.banned ? 'Unban' : 'Ban'

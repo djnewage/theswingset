@@ -123,6 +123,24 @@ export async function fetchPost(postId) {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
 
+/**
+ * An author's own members-visible posts, for their profile's post history.
+ * Uses the (authorId, visibility, createdAt) composite index. Connections-only
+ * and private posts are intentionally excluded here.
+ */
+export async function fetchAuthorPosts(authorId, max = 12) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'posts'),
+      where('authorId', '==', authorId),
+      where('visibility', '==', 'members'),
+      orderBy('createdAt', 'desc'),
+      limit(max),
+    ),
+  )
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
 export async function deletePost(postId) {
   await deleteDoc(doc(db, 'posts', postId))
 }
