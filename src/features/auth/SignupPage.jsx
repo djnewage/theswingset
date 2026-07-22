@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   signInWithPopup,
   updateProfile,
 } from 'firebase/auth'
@@ -64,6 +65,8 @@ export function SignupPage() {
         agreedToTerms: agreed,
       })
       await consumeInvite(invite.code)
+      // Best-effort: the in-app gate offers resend if this doesn't arrive.
+      await sendEmailVerification(cred.user).catch(() => {})
       navigate('/', { replace: true })
     } catch (err) {
       console.error('signup failed', err)
