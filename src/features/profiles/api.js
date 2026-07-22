@@ -120,9 +120,14 @@ export async function updateCouple(coupleId, patch) {
   await updateDoc(doc(db, 'couples', coupleId), patch)
 }
 
-export async function uploadCoupleCover(coupleId, file) {
+/**
+ * Uploads a couple cover into the uploading partner's own space (avoids a
+ * cross-service partner check in Storage rules). Only a partner can write the
+ * couple doc's coverPhotoURL, so partner-only control still holds.
+ */
+export async function uploadCoupleCover(uid, coupleId, file) {
   const blob = await processImageForUpload(file, 2000)
-  const storageRef = ref(storage, `couples/${coupleId}/cover/cover.jpg`)
+  const storageRef = ref(storage, `users/${uid}/couple-cover/${coupleId}.jpg`)
   await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' })
   return getDownloadURL(storageRef)
 }

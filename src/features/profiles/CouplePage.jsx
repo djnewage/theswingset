@@ -229,6 +229,7 @@ function PendingInvite({ uid, coupleId }) {
 }
 
 function CoupleEditor({ couple, coupleId }) {
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   const [coupleName, setCoupleName] = useState(couple.coupleName)
   const [bio, setBio] = useState(couple.bio ?? '')
@@ -259,7 +260,7 @@ function CoupleEditor({ couple, coupleId }) {
     setBusy(true)
     try {
       const patch = { coupleName, bio, location: location.trim() || null, lookingFor, boundaries, dualConsent }
-      if (coverFile) patch.coverPhotoURL = await uploadCoupleCover(coupleId, coverFile)
+      if (coverFile) patch.coverPhotoURL = await uploadCoupleCover(user.uid, coupleId, coverFile)
       await updateCouple(coupleId, patch)
       queryClient.invalidateQueries({ queryKey: ['couple', coupleId] })
       setSaved(true)

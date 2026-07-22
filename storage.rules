@@ -20,24 +20,26 @@ service firebase.storage {
         && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
     }
 
-    // Profile photos: any member may view; only the owner may write.
-    match /users/{uid}/profile/{fileName} {
+    // Profile photos AND couple cover images: any member may view; only the
+    // owner may write. Couple covers are uploaded by a partner into their own
+    // space (folder "profile" or "couple-cover") — no cross-service read
+    // needed. Partner-only control of the couple's coverPhotoURL field is
+    // enforced in Firestore rules (only a partner can write it).
+    match /users/{uid}/{folder}/{fileName} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn()
         && request.auth.uid == uid
+        && folder in ['profile', 'couple-cover']
         && isAllowedImage();
-      allow delete: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if isSignedIn() && request.auth.uid == uid
+        && folder in ['profile', 'couple-cover'];
     }
 
-    // Couple cover photos: any member may view; only a partner may write
-    // (cross-service check against the Firestore couple doc).
+    // Legacy couple cover path (seeded/older files): read-only. New covers are
+    // written under users/{uid}/couple-cover/ above.
     match /couples/{coupleId}/cover/{fileName} {
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn()
-        && request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.partnerUids
-        && isAllowedImage();
-      allow delete: if isSignedIn()
-        && request.auth.uid in firestore.get(/databases/(default)/documents/couples/$(coupleId)).data.partnerUids;
+      allow write: if false;
     }
 
     // Post images: uploader-scoped path; any member may view.
