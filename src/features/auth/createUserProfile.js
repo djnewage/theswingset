@@ -7,7 +7,7 @@ import { db } from '../../lib/firebase'
  * inviteCode is a validated, active invite code — required by security rules
  * (invite-only community); it's stored for audit and is immutable afterward.
  */
-export async function createUserProfile(uid, { displayName, dob, inviteCode }) {
+export async function createUserProfile(uid, { displayName, dob, inviteCode, agreedToTerms = false }) {
   await setDoc(doc(db, 'users', uid), {
     displayName,
     firstName: '',
@@ -24,6 +24,9 @@ export async function createUserProfile(uid, { displayName, dob, inviteCode }) {
     messagePolicy: 'connections', // safest default for message gating
     prompts: [],
     inviteCode: inviteCode ?? null,
+    // Records acceptance of ToS/Privacy/Guidelines at signup (immutable —
+    // not in the rules' allowed update keys).
+    termsAcceptedAt: agreedToTerms ? serverTimestamp() : null,
     createdAt: serverTimestamp(),
   })
 }

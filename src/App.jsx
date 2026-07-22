@@ -32,6 +32,9 @@ import { TravelPage } from './features/travel/TravelPage'
 import { MessagesPage } from './features/messages/MessagesPage'
 import { ThreadPage } from './features/messages/ThreadPage'
 import { ReactionsPage } from './features/prompts/ReactionsPage'
+import { TermsPage } from './features/legal/TermsPage'
+import { PrivacyPage } from './features/legal/PrivacyPage'
+import { GuidelinesPage } from './features/legal/GuidelinesPage'
 
 // '/theswingset' on GitHub Pages, '' everywhere else (BASE_URL ends with '/').
 const BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '')
@@ -43,6 +46,11 @@ export default function App() {
         <AuthProvider>
         <BrowserRouter basename={BASENAME}>
           <Routes>
+            {/* Public: readable before signup (linked from the agreement checkbox). */}
+            <Route path="/legal/terms" element={<TermsPage />} />
+            <Route path="/legal/privacy" element={<PrivacyPage />} />
+            <Route path="/legal/guidelines" element={<GuidelinesPage />} />
+
             <Route element={<RedirectIfAuthed />}>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />

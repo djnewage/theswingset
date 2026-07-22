@@ -9,7 +9,7 @@ import { auth, googleProvider } from '../../lib/firebase'
 import { isAdult, MIN_AGE } from '../../lib/age'
 import { createUserProfile } from './createUserProfile'
 import { consumeInvite, validateInvite } from './invites'
-import { AuthLayout, Field, GoogleButton, SubmitButton } from './AuthLayout'
+import { AgreeToTerms, AuthLayout, Field, GoogleButton, SubmitButton } from './AuthLayout'
 
 const FRIENDLY_ERRORS = {
   'auth/email-already-in-use': 'An account with that email already exists.',
@@ -29,6 +29,7 @@ export function SignupPage() {
   const [error, setError] = useState('')
   const [dobError, setDobError] = useState('')
   const [inviteError, setInviteError] = useState('')
+  const [agreed, setAgreed] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
@@ -60,6 +61,7 @@ export function SignupPage() {
         displayName: form.displayName,
         dob: form.dob,
         inviteCode: invite.code,
+        agreedToTerms: agreed,
       })
       await consumeInvite(invite.code)
       navigate('/', { replace: true })
@@ -140,6 +142,7 @@ export function SignupPage() {
           error={inviteError}
           required
         />
+        <AgreeToTerms checked={agreed} onChange={setAgreed} />
         {error && <p className="text-sm text-red-400">{error}</p>}
         <SubmitButton busy={busy}>Join</SubmitButton>
       </form>

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Logo } from '../../components/Logo'
 
 export function AuthLayout({ title, children }) {
@@ -12,7 +13,34 @@ export function AuthLayout({ title, children }) {
         A private, members-only community for adults 18+. Your profile is never
         publicly visible or indexed.
       </p>
+      <p className="mt-3 flex gap-4 text-xs text-charcoal-500">
+        <Link to="/legal/terms" className="hover:text-charcoal-300">Terms</Link>
+        <Link to="/legal/privacy" className="hover:text-charcoal-300">Privacy</Link>
+        <Link to="/legal/guidelines" className="hover:text-charcoal-300">Guidelines</Link>
+      </p>
     </div>
+  )
+}
+
+/** Required agreement checkbox used by both signup paths. */
+export function AgreeToTerms({ checked, onChange }) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-charcoal-300">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        required
+        className="mt-0.5 h-4 w-4 shrink-0 accent-[#f5b700]"
+      />
+      <span>
+        I'm 18 or older and I agree to the{' '}
+        <Link to="/legal/terms" target="_blank" className="text-gold-400 hover:text-gold-300">Terms of Service</Link>,{' '}
+        <Link to="/legal/privacy" target="_blank" className="text-gold-400 hover:text-gold-300">Privacy Policy</Link>, and{' '}
+        <Link to="/legal/guidelines" target="_blank" className="text-gold-400 hover:text-gold-300">Community Guidelines</Link>
+        {' '}— including its consent and discretion rules.
+      </span>
+    </label>
   )
 }
 

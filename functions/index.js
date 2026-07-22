@@ -153,6 +153,17 @@ exports.onGrantWritten = onDocumentWritten('albums/{albumId}/grants/{granteeUid}
   }
 })
 
+// ---------- event cleanup ----------
+
+// Deleting a Firestore doc does NOT delete its subcollections, so a deleted
+// event would leave RSVPs, chat messages, and — worst for a discretion-first
+// platform — the private/location doc (the host's exact address) orphaned
+// but still readable to anyone holding the old path. Wipe them all.
+exports.onEventDeleted = onDocumentDeleted('events/{eventId}', async (event) => {
+  await db.recursiveDelete(db.doc(`events/${event.params.eventId}`))
+  logger.info(`event ${event.params.eventId}: subcollections wiped`)
+})
+
 // ---------- RSVP counters + host notifications ----------
 
 exports.onRsvpWritten = onDocumentWritten('events/{eventId}/rsvps/{attendeeId}', async (event) => {

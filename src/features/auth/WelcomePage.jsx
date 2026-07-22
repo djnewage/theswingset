@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext'
 import { isAdult, MIN_AGE } from '../../lib/age'
 import { createUserProfile } from './createUserProfile'
 import { consumeInvite, validateInvite } from './invites'
-import { AuthLayout, Field, SubmitButton } from './AuthLayout'
+import { AgreeToTerms, AuthLayout, Field, SubmitButton } from './AuthLayout'
 
 /**
  * Completes signup for accounts that authenticated without giving us a DOB
@@ -21,6 +21,7 @@ export function WelcomePage() {
   const [inviteCode, setInviteCode] = useState('')
   const [dobError, setDobError] = useState('')
   const [inviteError, setInviteError] = useState('')
+  const [agreed, setAgreed] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -50,7 +51,12 @@ export function WelcomePage() {
           setBusy(false)
           return
         }
-        await createUserProfile(user.uid, { displayName, dob, inviteCode: invite.code })
+        await createUserProfile(user.uid, {
+          displayName,
+          dob,
+          inviteCode: invite.code,
+          agreedToTerms: agreed,
+        })
         await consumeInvite(invite.code)
       }
       navigate('/', { replace: true })
@@ -98,6 +104,7 @@ export function WelcomePage() {
           error={inviteError}
           required
         />
+        <AgreeToTerms checked={agreed} onChange={setAgreed} />
         {error && <p className="text-sm text-red-400">{error}</p>}
         <SubmitButton busy={busy}>Finish</SubmitButton>
       </form>

@@ -197,6 +197,12 @@ export function ProfilePage() {
       >
         Delete my account and all data
       </button>
+
+      <div className="mt-6 flex justify-center gap-5 text-xs text-charcoal-500">
+        <Link to="/legal/terms" className="hover:text-charcoal-300">Terms</Link>
+        <Link to="/legal/privacy" className="hover:text-charcoal-300">Privacy</Link>
+        <Link to="/legal/guidelines" className="hover:text-charcoal-300">Guidelines</Link>
+      </div>
     </div>
   )
 }
