@@ -50,24 +50,43 @@ service cloud.firestore {
     // ---------- invites ----------
     // Invite-only signup. A doc's ID *is* the code. `get` is public so the
     // signup form can validate a typed code before an account exists; `list`
-    // stays closed so codes can't be enumerated. Only admins mint codes; any
-    // signed-in user may burn a single use as they join.
+    // stays closed (except one's own codes / admins) so codes can't be
+    // enumerated. Admins mint unrestricted codes; MEMBERS may mint single-use
+    // codes to hand to people they vouch for. Any signed-in user may burn a
+    // single use as they join.
     match /invites/{code} {
       allow get: if true;
-      allow list: if isAdmin();
+      allow list: if isAdmin()
+        || (isSignedIn() && resource.data.createdBy == request.auth.uid);
 
-      allow create: if isAdmin()
-        && request.resource.data.active == true
-        && request.resource.data.useCount == 0
-        && request.resource.data.createdBy == request.auth.uid
-        && (request.resource.data.maxUses == null
-            || (request.resource.data.maxUses is int && request.resource.data.maxUses > 0));
+      allow create: if
+        // Admin codes: any maxUses (including unlimited).
+        (isAdmin()
+          && request.resource.data.active == true
+          && request.resource.data.useCount == 0
+          && request.resource.data.createdBy == request.auth.uid
+          && (request.resource.data.maxUses == null
+              || (request.resource.data.maxUses is int && request.resource.data.maxUses > 0)))
+        // Member codes: single-use, from members with a profile.
+        || (isSignedIn()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && request.resource.data.active == true
+          && request.resource.data.useCount == 0
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.maxUses == 1
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 80);
 
       allow update: if isAdmin()
         || (isSignedIn()
             && resource.data.active == true
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['useCount'])
-            && request.resource.data.useCount == resource.data.useCount + 1);
+            && request.resource.data.useCount == resource.data.useCount + 1)
+        // Members may deactivate their own unused codes.
+        || (isSignedIn()
+            && resource.data.createdBy == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active'])
+            && request.resource.data.active == false);
 
       allow delete: if isAdmin();
     }
@@ -144,6 +163,11 @@ service cloud.firestore {
           || request.resource.data.coupleId == null
           || (request.resource.data.coupleId is string
               && request.auth.uid in coupleData(request.resource.data.coupleId).partnerUids);
+      }
+
+      // ----- web push subscriptions (device tokens) — strictly private -----
+      match /pushSubs/{subId} {
+        allow read, write: if isSelf(uid);
       }
     }
 

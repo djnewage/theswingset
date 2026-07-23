@@ -2,24 +2,67 @@ const { onDocumentCreated, onDocumentDeleted } = require('firebase-functions/v2/
 const { onObjectFinalized } = require('firebase-functions/v2/storage')
 const { logger } = require('firebase-functions')
 const admin = require('firebase-admin')
+const webpush = require('web-push')
 
 admin.initializeApp()
 const db = admin.firestore()
 const { FieldValue } = admin.firestore
 
+// ---------- web push ----------
+
+// VAPID keys come from functions/.env (gitignored; deployed as env vars).
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY
+if (VAPID_PUBLIC && VAPID_PRIVATE) {
+  webpush.setVapidDetails('mailto:admin@theswingset.invalid', VAPID_PUBLIC, VAPID_PRIVATE)
+}
+
+/**
+ * Sends a web push to every device subscription a user has registered.
+ * Subscriptions marked discreet get "New activity" instead of the real text.
+ * Dead subscriptions (404/410 from the push service) are cleaned up.
+ */
+async function sendPush(uid, item) {
+  if (!VAPID_PUBLIC || !VAPID_PRIVATE) return
+  const subs = await db.collection(`users/${uid}/pushSubs`).get()
+  if (subs.empty) return
+  await Promise.all(
+    subs.docs.map(async (docSnap) => {
+      const { subscription, discreet } = docSnap.data()
+      if (!subscription?.endpoint) return
+      const payload = JSON.stringify({
+        title: 'The Swingset',
+        body: discreet ? 'New activity' : item.text,
+        link: item.link ?? '/',
+      })
+      try {
+        await webpush.sendNotification(subscription, payload, { TTL: 86400 })
+      } catch (err) {
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          await docSnap.ref.delete() // expired/unsubscribed — stop trying
+        } else {
+          logger.warn(`push to ${uid} failed`, { status: err.statusCode })
+        }
+      }
+    }),
+  )
+}
+
 // ---------- notification fan-out ----------
 
-/** Writes a notification item for each recipient uid (skipping the actor). */
+/** Writes a notification item for each recipient uid (skipping the actor),
+ * and mirrors it to their devices via web push. */
 async function notify(recipientUids, actorUid, item) {
   const recipients = [...new Set(recipientUids)].filter((uid) => uid && uid !== actorUid)
   await Promise.all(
-    recipients.map((uid) =>
-      db.collection(`notifications/${uid}/items`).add({
+    recipients.map(async (uid) => {
+      await db.collection(`notifications/${uid}/items`).add({
         ...item,
         read: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      }),
-    ),
+      })
+      await sendPush(uid, item).catch((err) => logger.warn('sendPush failed', err))
+    }),
   )
 }
 

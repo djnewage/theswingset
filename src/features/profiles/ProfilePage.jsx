@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteUser } from 'firebase/auth'
 import { deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
@@ -12,6 +12,12 @@ import { AlbumsSection } from '../albums/AlbumsSection'
 import { usePostableAuthors } from '../feed/useAuthor'
 import { usePendingRequests } from '../connections/usePendingRequests'
 import { isAdminUser } from '../verification/api'
+import {
+  createMemberInvite,
+  deactivateMyInvite,
+  listMyInvites,
+  MEMBER_INVITE_LIMIT,
+} from '../auth/invites'
 
 export function ProfilePage() {
   const { user, profile, signOut } = useAuth()
@@ -153,6 +159,8 @@ export function ProfilePage() {
         </p>
       </Link>
 
+      <InviteFriendsCard uid={user.uid} />
+
       <Link
         to="/reactions"
         className="mt-4 block rounded-2xl bg-charcoal-900 p-5 ring-1 ring-charcoal-800 transition hover:ring-charcoal-600"
@@ -203,6 +211,82 @@ export function ProfilePage() {
         <Link to="/legal/privacy" className="hover:text-charcoal-300">Privacy</Link>
         <Link to="/legal/guidelines" className="hover:text-charcoal-300">Guidelines</Link>
       </div>
+    </div>
+  )
+}
+
+/** Word-of-mouth growth with vetting intact: members hand single-use codes
+ * to people they personally vouch for. */
+function InviteFriendsCard({ uid }) {
+  const queryClient = useQueryClient()
+  const [copied, setCopied] = useState('')
+
+  const { data: invites = [] } = useQuery({
+    queryKey: ['myInvites', uid],
+    queryFn: () => listMyInvites(uid),
+  })
+
+  const create = useMutation({
+    mutationFn: () => createMemberInvite(uid),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myInvites', uid] }),
+  })
+  const cancel = useMutation({
+    mutationFn: (code) => deactivateMyInvite(code),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['myInvites', uid] }),
+  })
+
+  const open = invites.filter((i) => i.active && (i.useCount ?? 0) < 1)
+  const usedCount = invites.filter((i) => (i.useCount ?? 0) >= 1).length
+
+  const copy = (code) => {
+    navigator.clipboard?.writeText(code).then(() => {
+      setCopied(code)
+      setTimeout(() => setCopied(''), 1500)
+    })
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl bg-charcoal-900 p-5 ring-1 ring-charcoal-800">
+      <p className="text-sm font-medium text-gold-400">Invite friends</p>
+      <p className="mt-0.5 text-sm text-charcoal-300">
+        {usedCount > 0
+          ? `${usedCount} ${usedCount === 1 ? 'person has' : 'people have'} joined on your invites.`
+          : 'Each code admits one person you vouch for.'}
+      </p>
+
+      {open.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          {open.map((inv) => (
+            <div key={inv.code} className="flex items-center gap-2">
+              <button
+                onClick={() => copy(inv.code)}
+                className="rounded-lg bg-charcoal-800 px-3 py-1.5 font-mono text-sm font-semibold tracking-wider text-gold-400 ring-1 ring-charcoal-600 hover:bg-charcoal-700"
+                title="Copy code"
+              >
+                {copied === inv.code ? 'Copied!' : inv.code}
+              </button>
+              <span className="flex-1 text-xs text-charcoal-500">unused</span>
+              <button
+                onClick={() => cancel.mutate(inv.code)}
+                disabled={cancel.isPending}
+                className="text-xs text-charcoal-500 hover:text-red-400"
+              >
+                Cancel
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {open.length < MEMBER_INVITE_LIMIT && (
+        <button
+          onClick={() => create.mutate()}
+          disabled={create.isPending}
+          className="mt-3 h-10 w-full rounded-2xl bg-charcoal-800 text-sm font-medium text-charcoal-200 ring-1 ring-charcoal-600 hover:bg-charcoal-700 disabled:opacity-50"
+        >
+          {create.isPending ? 'Creating…' : '+ New invite code'}
+        </button>
+      )}
     </div>
   )
 }

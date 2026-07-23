@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { useDiscretion } from '../discretion/DiscretionProvider'
 import { fetchNotifications, markAllRead } from './api'
+import { disablePush, enablePush, pushEnabledHere, pushSupported } from './push'
 import { timeAgo } from '../../lib/time'
 
 const ICONS = {
@@ -12,6 +13,72 @@ const ICONS = {
   connection_request: '🤝',
   connection_accepted: '🎉',
   rsvp: '📅',
+}
+
+/** Enable/disable device push. Discreet mode is honored per device: with it
+ * on, this device's lock screen shows only "New activity". */
+function PushBanner() {
+  const { user } = useAuth()
+  const { settings } = useDiscretion()
+  const [state, setState] = useState('loading') // loading|off|on|denied|unsupported|hidden
+
+  useEffect(() => {
+    if (!pushSupported()) {
+      setState('unsupported')
+      return
+    }
+    if (Notification.permission === 'denied') {
+      setState('denied')
+      return
+    }
+    pushEnabledHere().then((on) => setState(on ? 'on' : 'off'))
+  }, [])
+
+  if (state === 'loading' || state === 'unsupported' || state === 'hidden') return null
+
+  if (state === 'denied') {
+    return (
+      <p className="mb-4 rounded-2xl bg-charcoal-900 px-4 py-3 text-xs text-charcoal-400 ring-1 ring-charcoal-800">
+        Notifications are blocked for this site in your browser settings — allow
+        them there to get push alerts.
+      </p>
+    )
+  }
+
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-charcoal-900 px-4 py-3 ring-1 ring-charcoal-800">
+      <div>
+        <p className="text-sm font-medium text-charcoal-100">
+          {state === 'on' ? 'Push notifications are on' : 'Get notified on this device'}
+        </p>
+        <p className="mt-0.5 text-xs text-charcoal-400">
+          {state === 'on'
+            ? settings.discreetNotifications
+              ? 'Discreet mode: alerts say only “New activity.”'
+              : 'Messages, requests, and replies reach your lock screen.'
+            : 'DMs and connection requests, even when the app is closed.'}
+        </p>
+      </div>
+      <button
+        onClick={async () => {
+          if (state === 'on') {
+            await disablePush(user.uid)
+            setState('off')
+          } else {
+            const result = await enablePush(user.uid, { discreet: settings.discreetNotifications })
+            setState(result === 'enabled' ? 'on' : result === 'denied' ? 'denied' : 'off')
+          }
+        }}
+        className={`h-9 shrink-0 rounded-xl px-3.5 text-sm font-semibold ${
+          state === 'on'
+            ? 'bg-charcoal-800 text-charcoal-300 ring-1 ring-charcoal-600 hover:bg-charcoal-700'
+            : 'bg-gold-500 text-charcoal-950 hover:bg-gold-400'
+        }`}
+      >
+        {state === 'on' ? 'Turn off' : 'Enable'}
+      </button>
+    </div>
+  )
 }
 
 export function NotificationsPage() {
@@ -46,6 +113,8 @@ export function NotificationsPage() {
         </button>
         <h1 className="text-xl font-semibold text-charcoal-50">Notifications</h1>
       </div>
+
+      <PushBanner />
 
       {isPending && <p className="py-10 text-center text-sm text-charcoal-500">Loading…</p>}
 

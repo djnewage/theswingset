@@ -9,6 +9,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 
@@ -82,4 +83,38 @@ export async function listInvites() {
 
 export async function setInviteActive(code, active) {
   await updateDoc(doc(db, 'invites', code), { active })
+}
+
+// ---------- member invites ----------
+
+export const MEMBER_INVITE_LIMIT = 3
+
+/** Codes this member has minted (rules require the createdBy filter). */
+export async function listMyInvites(uid) {
+  const snap = await getDocs(query(collection(db, 'invites'), where('createdBy', '==', uid)))
+  return snap.docs
+    .map((d) => ({ code: d.id, ...d.data() }))
+    .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0))
+}
+
+/** Members mint single-use codes for people they personally vouch for. */
+export async function createMemberInvite(uid) {
+  const code = Array.from(
+    crypto.getRandomValues(new Uint8Array(8)),
+    (b) => CODE_ALPHABET[b % CODE_ALPHABET.length],
+  ).join('')
+  await setDoc(doc(db, 'invites', code), {
+    active: true,
+    useCount: 0,
+    maxUses: 1,
+    note: '',
+    createdBy: uid,
+    createdAt: serverTimestamp(),
+  })
+  return code
+}
+
+/** A member may cancel their own unused code. */
+export async function deactivateMyInvite(code) {
+  await updateDoc(doc(db, 'invites', code), { active: false })
 }
