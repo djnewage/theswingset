@@ -8,6 +8,8 @@ import { SignupPage } from './features/auth/SignupPage'
 import { WelcomePage } from './features/auth/WelcomePage'
 import { RedirectIfAuthed, RequireAuth, RequireProfile } from './features/auth/guards'
 import { VerifyEmailGate } from './features/auth/VerifyEmailGate'
+import { MembershipGate } from './features/membership/MembershipGate'
+import { MembershipPage } from './features/membership/MembershipPage'
 import { AppShell } from './components/AppShell'
 import { ProfilePage } from './features/profiles/ProfilePage'
 import { EditProfilePage } from './features/profiles/EditProfilePage'
@@ -62,6 +64,7 @@ export default function App() {
 
               <Route element={<RequireProfile />}>
                 <Route element={<VerifyEmailGate />}>
+                <Route element={<MembershipGate />}>
                 <Route element={<AppShell />}>
                   <Route index element={<FeedPage />} />
                   <Route path="post/:postId" element={<PostPage />} />
@@ -88,6 +91,8 @@ export default function App() {
                   <Route path="profile" element={<ProfilePage />} />
                   <Route path="profile/edit" element={<EditProfilePage />} />
                   <Route path="couple" element={<CouplePage />} />
+                  <Route path="membership" element={<MembershipPage />} />
+                </Route>
                 </Route>
                 </Route>
               </Route>

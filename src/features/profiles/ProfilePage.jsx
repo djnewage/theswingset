@@ -194,6 +194,14 @@ export function ProfilePage() {
         <p className="mt-0.5 text-sm text-charcoal-300">Quick-hide, PIN lock, private notifications →</p>
       </Link>
 
+      <Link
+        to="/membership"
+        className="mt-4 block rounded-2xl bg-charcoal-900 p-5 ring-1 ring-charcoal-800 transition hover:ring-charcoal-600"
+      >
+        <p className="text-sm font-medium text-gold-400">Membership</p>
+        <p className="mt-0.5 text-sm text-charcoal-300">Your plan and billing →</p>
+      </Link>
+
       {isAdmin && (
         <Link
           to="/admin"

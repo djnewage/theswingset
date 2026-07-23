@@ -5,6 +5,9 @@ import { useAuth } from '../auth/AuthContext'
 import { isAdminUser } from '../verification/api'
 import { VerificationQueue } from '../verification/AdminVerificationsPage'
 import { createInvite, listInvites, setInviteActive } from '../auth/invites'
+import { fetchBillingConfig } from '../membership/api'
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
 import {
   fetchAdminUids,
   fetchAllUsers,
@@ -18,7 +21,7 @@ import {
 import { Avatar } from '../../components/Avatar'
 import { timeAgo } from '../../lib/time'
 
-const TABS = ['Members', 'Reports', 'Verifications', 'Invites']
+const TABS = ['Members', 'Reports', 'Verifications', 'Invites', 'Billing']
 
 export function AdminPage() {
   const { user } = useAuth()
@@ -44,12 +47,12 @@ export function AdminPage() {
     <div className="px-4 pt-6 pb-10">
       <h1 className="mb-4 text-xl font-semibold text-charcoal-50">Admin</h1>
 
-      <div className="mb-5 grid grid-cols-4 gap-2 rounded-2xl bg-charcoal-900 p-1 ring-1 ring-charcoal-700">
+      <div className="mb-5 grid grid-cols-5 gap-1.5 rounded-2xl bg-charcoal-900 p-1 ring-1 ring-charcoal-700">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`h-10 rounded-xl text-sm font-medium transition ${
+            className={`h-10 rounded-xl text-xs font-medium transition sm:text-sm ${
               tab === t ? 'bg-gold-500 text-charcoal-950' : 'text-charcoal-300 hover:text-charcoal-100'
             }`}
           >
@@ -62,6 +65,105 @@ export function AdminPage() {
       {tab === 'Reports' && <ReportsTab />}
       {tab === 'Verifications' && <VerificationQueue />}
       {tab === 'Invites' && <InvitesTab />}
+      {tab === 'Billing' && <BillingTab />}
+    </div>
+  )
+}
+
+// ---------- billing ----------
+
+function BillingTab() {
+  const queryClient = useQueryClient()
+  const [priceId, setPriceId] = useState(null) // null = untouched
+
+  const { data: config, isPending } = useQuery({
+    queryKey: ['billingConfig'],
+    queryFn: fetchBillingConfig,
+  })
+
+  const save = useMutation({
+    mutationFn: (patch) =>
+      setDoc(doc(db, 'config', 'billing'), patch, { merge: true }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['billingConfig'] }),
+  })
+
+  if (isPending) {
+    return <p className="py-8 text-center text-sm text-charcoal-500">Loading…</p>
+  }
+
+  const charging = !!config?.chargingEnabled
+
+  const toggleCharging = () => {
+    const msg = charging
+      ? 'Turn OFF paid membership? Everyone gets free access again.'
+      : 'Turn ON paid membership?\n\nEveryone with an existing account becomes a FOUNDING MEMBER (free for life). New signups from this moment get a trial, then must subscribe. Make sure the Stripe extension is installed and the price ID below is set first.'
+    if (!window.confirm(msg)) return
+    const patch = { chargingEnabled: !charging }
+    // The founding cutoff is stamped once, the first time charging turns on.
+    if (!charging && !config?.foundingCutoff) patch.foundingCutoff = serverTimestamp()
+    save.mutate(patch)
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-2xl bg-charcoal-900 p-4 ring-1 ring-charcoal-800">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-charcoal-100">Paid membership</p>
+            <p className="mt-0.5 text-xs text-charcoal-400">
+              {charging
+                ? `ON — $${config.priceMonthly}/mo, ${config.trialDays}-day trial for new members`
+                : 'OFF — everyone has free access. Existing members become Founding Members (free for life) when this turns on.'}
+            </p>
+          </div>
+          <button
+            onClick={toggleCharging}
+            disabled={save.isPending || (!charging && !config?.stripePriceId)}
+            className={`h-9 shrink-0 rounded-xl px-4 text-sm font-semibold disabled:opacity-40 ${
+              charging
+                ? 'bg-charcoal-800 text-red-400 ring-1 ring-charcoal-600'
+                : 'bg-gold-500 text-charcoal-950 hover:bg-gold-400'
+            }`}
+          >
+            {charging ? 'Turn off' : 'Turn on'}
+          </button>
+        </div>
+        {!charging && !config?.stripePriceId && (
+          <p className="mt-2 text-xs text-gold-400">
+            Set the Stripe price ID below before charging can turn on.
+          </p>
+        )}
+      </div>
+
+      <div className="rounded-2xl bg-charcoal-900 p-4 ring-1 ring-charcoal-800">
+        <p className="text-sm font-semibold text-charcoal-100">Stripe price ID</p>
+        <p className="mt-0.5 text-xs text-charcoal-400">
+          From Stripe → Products → your $12.99/mo price (starts with “price_”).
+          Requires the firestore-stripe-payments extension.
+        </p>
+        <div className="mt-2 flex gap-2">
+          <input
+            value={priceId ?? config?.stripePriceId ?? ''}
+            onChange={(e) => setPriceId(e.target.value)}
+            placeholder="price_…"
+            className="h-10 flex-1 rounded-xl border border-charcoal-600 bg-charcoal-800 px-3 font-mono text-xs text-charcoal-50 outline-none focus:border-gold-500"
+          />
+          <button
+            onClick={() => save.mutate({ stripePriceId: priceId.trim() || null })}
+            disabled={save.isPending || priceId === null}
+            className="h-10 rounded-xl bg-charcoal-800 px-4 text-sm font-medium text-charcoal-200 ring-1 ring-charcoal-600 hover:bg-charcoal-700 disabled:opacity-40"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+
+      <p className="text-xs leading-5 text-charcoal-500">
+        Launch checklist: create the Stripe account → install the
+        firestore-stripe-payments extension with its keys → create the
+        $12.99/mo product in Stripe → paste the price ID here → turn on.
+        Founding cutoff {config?.foundingCutoff ? 'was stamped and is locked' : 'gets stamped the first time charging turns on'}.
+      </p>
     </div>
   )
 }

@@ -91,6 +91,38 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ---------- billing ----------
+    // App-wide billing switches (price, trial, charging on/off). Members read
+    // it to resolve their membership; only admins flip it.
+    match /config/{docId} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow write: if isAdmin();
+    }
+
+    // Stripe extension data (customers/{uid}/...): the extension's backend
+    // writes these; clients only read their own — except subscriptions, which
+    // a linked partner may also read (one subscription covers the couple).
+    match /customers/{uid} {
+      function sameCouple() {
+        let myCoupleId = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.coupleId;
+        return myCoupleId != null
+          && myCoupleId == get(/databases/$(database)/documents/users/$(uid)).data.coupleId;
+      }
+
+      allow get: if isSelf(uid);
+
+      match /checkout_sessions/{sessionId} {
+        allow read, create: if isSelf(uid);
+      }
+      match /subscriptions/{subscriptionId} {
+        allow read: if isSelf(uid) || (isSignedIn() && sameCouple());
+      }
+      match /payments/{paymentId} {
+        allow read: if isSelf(uid);
+      }
+    }
+
     // ---------- users ----------
     match /users/{uid} {
       // Profile creation requires a real, active invite code (invite-only).
