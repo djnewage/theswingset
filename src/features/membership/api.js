@@ -98,7 +98,7 @@ export async function openBillingPortal() {
     'ext-firestore-stripe-payments-createPortalLink',
   )
   const { data } = await createPortalLink({
-    return_url: window.location.origin + import.meta.env.BASE_URL + 'membership',
+    returnUrl: window.location.origin + import.meta.env.BASE_URL + 'membership',
   })
   window.location.assign(data.url)
 }
