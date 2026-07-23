@@ -13,6 +13,7 @@ import { usePostableAuthors } from '../feed/useAuthor'
 import { usePendingRequests } from '../connections/usePendingRequests'
 import { isAdminUser } from '../verification/api'
 import { AuthorPosts } from '../feed/AuthorPosts'
+import { Lightbox } from '../../components/Lightbox'
 import {
   createMemberInvite,
   deactivateMyInvite,
@@ -25,6 +26,7 @@ export function ProfilePage() {
   const authors = usePostableAuthors()
   const pendingRequests = usePendingRequests()
   const [deleteError, setDeleteError] = useState('')
+  const [photoOpen, setPhotoOpen] = useState(false)
 
   const deleteAccount = async () => {
     if (profile.coupleId) {
@@ -62,7 +64,13 @@ export function ProfilePage() {
     <div className="px-4 pt-8 pb-8">
       <div className="rounded-2xl bg-charcoal-900 p-6 ring-1 ring-charcoal-800">
         <div className="flex items-center gap-4">
-          <Avatar src={profile.photoURL} name={profile.displayName} className="h-16 w-16 text-2xl" />
+          <button
+            onClick={() => profile.photoURL && setPhotoOpen(true)}
+            className={profile.photoURL ? 'cursor-zoom-in' : 'cursor-default'}
+            aria-label={profile.photoURL ? 'View profile photo' : undefined}
+          >
+            <Avatar src={profile.photoURL} name={profile.displayName} className="h-16 w-16 text-2xl" />
+          </button>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold text-charcoal-50">
               {profile.displayName}
@@ -220,6 +228,10 @@ export function ProfilePage() {
         <Link to="/legal/privacy" className="hover:text-charcoal-300">Privacy</Link>
         <Link to="/legal/guidelines" className="hover:text-charcoal-300">Guidelines</Link>
       </div>
+
+      {photoOpen && (
+        <Lightbox images={[profile.photoURL]} onClose={() => setPhotoOpen(false)} />
+      )}
     </div>
   )
 }

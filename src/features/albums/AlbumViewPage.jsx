@@ -16,6 +16,7 @@ import {
 } from './api'
 import { fetchCouple } from '../profiles/api'
 import { Avatar } from '../../components/Avatar'
+import { Lightbox } from '../../components/Lightbox'
 
 export function AlbumViewPage() {
   const { albumId } = useParams()
@@ -24,6 +25,7 @@ export function AlbumViewPage() {
   const queryClient = useQueryClient()
   const fileInput = useRef(null)
   const [uploading, setUploading] = useState(false)
+  const [viewer, setViewer] = useState(null) // index of the opened photo
 
   const { data: album, isPending } = useQuery({
     queryKey: ['album', albumId],
@@ -150,9 +152,11 @@ export function AlbumViewPage() {
         </div>
       ) : (
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {(photosQuery.data ?? []).map((photo) => (
+          {(photosQuery.data ?? []).map((photo, i) => (
             <div key={photo.id} className="group relative">
-              <img src={photo.url} alt="" loading="lazy" className="aspect-square w-full rounded-xl object-cover" />
+              <button onClick={() => setViewer(i)} className="block w-full cursor-zoom-in">
+                <img src={photo.url} alt="" loading="lazy" className="aspect-square w-full rounded-xl object-cover" />
+              </button>
               {isOwner && (
                 <button
                   onClick={() => removePhoto(photo.id)}
@@ -170,6 +174,14 @@ export function AlbumViewPage() {
             </p>
           )}
         </div>
+      )}
+
+      {viewer !== null && (
+        <Lightbox
+          images={(photosQuery.data ?? []).map((p) => p.url)}
+          initialIndex={viewer}
+          onClose={() => setViewer(null)}
+        />
       )}
     </div>
   )

@@ -8,6 +8,7 @@ import { useAuthorPhoto } from './useAuthor'
 import { useBlocks } from './useBlocks'
 import { ReportDialog } from './ReportDialog'
 import { Avatar } from '../../components/Avatar'
+import { Lightbox } from '../../components/Lightbox'
 import { timeAgo } from '../../lib/time'
 
 export function PostCard({ post, onShare }) {
@@ -16,6 +17,7 @@ export function PostCard({ post, onShare }) {
   const queryClient = useQueryClient()
   const { block } = useBlocks()
   const [reporting, setReporting] = useState(false)
+  const [viewer, setViewer] = useState(null) // index of the opened image
 
   const isMine = post.authorUids?.includes(user.uid)
   const authorPhoto = useAuthorPhoto({
@@ -117,10 +119,15 @@ export function PostCard({ post, onShare }) {
 
       {post.imageURLs?.length > 0 && (
         <div className={`mt-3 grid gap-1.5 overflow-hidden rounded-2xl ${post.imageURLs.length > 1 ? 'grid-cols-2' : ''}`}>
-          {post.imageURLs.map((url) => (
-            <img key={url} src={url} alt="" loading="lazy" className="aspect-square w-full object-cover" />
+          {post.imageURLs.map((url, i) => (
+            <button key={url} onClick={() => setViewer(i)} className="block cursor-zoom-in">
+              <img src={url} alt="" loading="lazy" className="aspect-square w-full object-cover" />
+            </button>
           ))}
         </div>
+      )}
+      {viewer !== null && (
+        <Lightbox images={post.imageURLs} initialIndex={viewer} onClose={() => setViewer(null)} />
       )}
 
       <div className="mt-3 flex items-center gap-6 text-sm text-charcoal-400">

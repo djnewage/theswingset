@@ -13,6 +13,7 @@ import { ReportDialog } from '../feed/ReportDialog'
 import { AuthorPosts } from '../feed/AuthorPosts'
 import { useBlocks } from '../feed/useBlocks'
 import { Avatar } from '../../components/Avatar'
+import { Lightbox } from '../../components/Lightbox'
 import { monthYear } from '../../lib/time'
 
 export function UserProfileView() {
@@ -20,6 +21,7 @@ export function UserProfileView() {
   const { user } = useAuth()
   const { block, isBlocked, unblock } = useBlocks()
   const [reporting, setReporting] = useState(false)
+  const [photoOpen, setPhotoOpen] = useState(false)
   const [params] = useSearchParams()
 
   const { data: member, isPending, isError } = useQuery({
@@ -61,7 +63,13 @@ export function UserProfileView() {
       )}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-4">
-          <Avatar src={member.photoURL} name={member.displayName} className="h-16 w-16 text-2xl" />
+          <button
+            onClick={() => member.photoURL && setPhotoOpen(true)}
+            className={member.photoURL ? 'cursor-zoom-in' : 'cursor-default'}
+            aria-label={member.photoURL ? 'View profile photo' : undefined}
+          >
+            <Avatar src={member.photoURL} name={member.displayName} className="h-16 w-16 text-2xl" />
+          </button>
           <div>
             <h1 className="text-xl font-bold text-charcoal-50">
               {member.displayName}
@@ -142,6 +150,10 @@ export function UserProfileView() {
         targetType="user"
         targetId={uid}
       />
+
+      {photoOpen && (
+        <Lightbox images={[member.photoURL]} onClose={() => setPhotoOpen(false)} />
+      )}
     </div>
   )
 }

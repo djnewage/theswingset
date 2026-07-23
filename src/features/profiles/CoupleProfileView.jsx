@@ -12,6 +12,7 @@ import { ReportDialog } from '../feed/ReportDialog'
 import { AuthorPosts } from '../feed/AuthorPosts'
 import { useBlocks } from '../feed/useBlocks'
 import { Avatar } from '../../components/Avatar'
+import { Lightbox } from '../../components/Lightbox'
 import { monthYear } from '../../lib/time'
 
 export function CoupleProfileView() {
@@ -19,6 +20,7 @@ export function CoupleProfileView() {
   const { user } = useAuth()
   const { block, isBlocked, unblock } = useBlocks()
   const [reporting, setReporting] = useState(false)
+  const [coverOpen, setCoverOpen] = useState(false)
 
   const { data: couple, isPending } = useQuery({
     queryKey: ['couple', coupleId],
@@ -53,7 +55,9 @@ export function CoupleProfileView() {
   return (
     <div className="pb-10">
       {couple.coverPhotoURL ? (
-        <img src={couple.coverPhotoURL} alt="" className="h-48 w-full object-cover" />
+        <button onClick={() => setCoverOpen(true)} className="block w-full cursor-zoom-in">
+          <img src={couple.coverPhotoURL} alt="" className="h-48 w-full object-cover" />
+        </button>
       ) : (
         <div className="h-24 w-full bg-gradient-to-r from-gold-700/40 to-charcoal-800" />
       )}
@@ -160,6 +164,10 @@ export function CoupleProfileView() {
         targetType="couple"
         targetId={coupleId}
       />
+
+      {coverOpen && (
+        <Lightbox images={[couple.coverPhotoURL]} onClose={() => setCoverOpen(false)} />
+      )}
     </div>
   )
 }
