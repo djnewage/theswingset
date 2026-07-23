@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { fetchCouple, fetchUser } from '../profiles/api'
+import { memberName } from '../../lib/names'
 
 /**
  * Returns the identities the current user can post/comment as:
@@ -37,27 +38,56 @@ export function usePostableAuthors() {
 }
 
 /**
- * Resolves an author's CURRENT avatar rather than trusting the value
- * denormalized onto the post at write time (which is null for older posts and
- * stale after someone changes their photo). Cached per author, so a feed full
- * of one author's posts costs a single read. Falls back to the denormalized
- * value if the live read is unavailable (e.g. a profile hidden from the viewer).
+ * Resolves an author's CURRENT avatar and name rather than trusting the
+ * values denormalized onto the post at write time (null/stale after profile
+ * edits). Cached per author, so a feed full of one author's posts costs a
+ * single read. Falls back to the denormalized values if the live read is
+ * unavailable (e.g. a profile hidden from the viewer).
  */
-export function useAuthorPhoto({ authorType, authorId, authorPhotoURL }) {
+export function useAuthorInfo({ authorType, authorId, authorPhotoURL, authorName }) {
   const { data } = useQuery({
-    queryKey: ['authorPhoto', authorType, authorId],
+    queryKey: ['authorInfo', authorType, authorId],
     enabled: !!authorId,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       try {
         if (authorType === 'couple') {
-          return (await fetchCouple(authorId))?.coverPhotoURL ?? null
+          const couple = await fetchCouple(authorId)
+          return couple
+            ? { photoURL: couple.coverPhotoURL ?? null, name: couple.coupleName ?? null }
+            : null
         }
-        return (await fetchUser(authorId))?.photoURL ?? null
+        const member = await fetchUser(authorId)
+        return member
+          ? { photoURL: member.photoURL ?? null, name: memberName(member) || null }
+          : null
       } catch {
         return null // hidden/denied — fall back below
       }
     },
   })
-  return data ?? authorPhotoURL ?? null
+  return {
+    photoURL: data?.photoURL ?? authorPhotoURL ?? null,
+    name: data?.name ?? authorName ?? '',
+  }
+}
+
+/** Live display name for a single member (comments, attendee rows, …). */
+export function useMemberName(uid, fallback) {
+  const { data } = useQuery({
+    queryKey: ['authorInfo', 'user', uid],
+    enabled: !!uid,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      try {
+        const member = await fetchUser(uid)
+        return member
+          ? { photoURL: member.photoURL ?? null, name: memberName(member) || null }
+          : null
+      } catch {
+        return null
+      }
+    },
+  })
+  return data?.name ?? fallback ?? ''
 }

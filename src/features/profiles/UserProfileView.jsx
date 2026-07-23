@@ -14,6 +14,7 @@ import { AuthorPosts } from '../feed/AuthorPosts'
 import { useBlocks } from '../feed/useBlocks'
 import { Avatar } from '../../components/Avatar'
 import { Lightbox } from '../../components/Lightbox'
+import { memberName } from '../../lib/names'
 import { monthYear } from '../../lib/time'
 
 export function UserProfileView() {
@@ -68,11 +69,11 @@ export function UserProfileView() {
             className={member.photoURL ? 'cursor-zoom-in' : 'cursor-default'}
             aria-label={member.photoURL ? 'View profile photo' : undefined}
           >
-            <Avatar src={member.photoURL} name={member.displayName} className="h-16 w-16 text-2xl" />
+            <Avatar src={member.photoURL} name={memberName(member)} className="h-16 w-16 text-2xl" />
           </button>
           <div>
             <h1 className="text-xl font-bold text-charcoal-50">
-              {member.displayName}
+              {memberName(member)}
               {member.verified && (
                 <span className="ml-1.5 text-gold-400" title="Photo verified">✓</span>
               )}

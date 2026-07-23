@@ -19,6 +19,7 @@ import {
   updateReportStatus,
 } from './api'
 import { Avatar } from '../../components/Avatar'
+import { memberName } from '../../lib/names'
 import { timeAgo } from '../../lib/time'
 
 const TABS = ['Members', 'Reports', 'Verifications', 'Invites', 'Billing']
@@ -330,6 +331,7 @@ function MembersTab() {
     (u) =>
       !needle ||
       u.displayName?.toLowerCase().includes(needle) ||
+      memberName(u).toLowerCase().includes(needle) ||
       u.location?.toLowerCase().includes(needle) ||
       u.id.toLowerCase().includes(needle),
   )
@@ -355,11 +357,11 @@ function MembersTab() {
           >
             <div className="flex items-center gap-3">
               <Link to={`/u/${u.id}`}>
-                <Avatar src={u.photoURL} name={u.displayName} className="h-10 w-10 text-base" />
+                <Avatar src={u.photoURL} name={memberName(u)} className="h-10 w-10 text-base" />
               </Link>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-charcoal-50">
-                  {u.displayName}
+                  {memberName(u)}
                   {u.verified && <span className="ml-1 text-gold-400">✓</span>}
                   {adminSet.has(u.id) && (
                     <span className="ml-1.5 rounded-full bg-gold-500/15 px-2 py-0.5 text-[10px] font-semibold text-gold-400">

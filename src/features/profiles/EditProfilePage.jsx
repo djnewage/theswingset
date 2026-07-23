@@ -111,6 +111,10 @@ export function EditProfilePage() {
           <Field label="First name" value={form.firstName} onChange={set('firstName')} maxLength={40} />
           <Field label="Last name" value={form.lastName} onChange={set('lastName')} maxLength={40} />
         </div>
+        <p className="-mt-3 text-xs text-charcoal-500">
+          If you add a name, members see it instead of your display name. Many
+          members use a first name only, or leave both blank — your call.
+        </p>
         <Field
           label="Location (city / region only)"
           value={form.location}

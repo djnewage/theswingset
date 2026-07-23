@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { addComment, deleteComment, fetchComments, fetchPost } from './api'
+import { useMemberName } from './useAuthor'
 import { useBlocks } from './useBlocks'
 import { PostCard } from './PostCard'
 import { ReportDialog } from './ReportDialog'
@@ -86,12 +87,14 @@ export function PostPage() {
   }
   const roots = visible.filter((c) => !c.replyTo || !rootIds.has(c.replyTo.commentId))
 
-  const Comment = ({ comment, isReply }) => (
+  const Comment = ({ comment, isReply }) => {
+    const authorName = useMemberName(comment.authorId, comment.authorName)
+    return (
     <div className={`flex gap-3 py-3 ${isReply ? 'ml-11 border-l-2 border-charcoal-800 pl-3' : 'border-b border-charcoal-900'}`}>
-      <Avatar src={comment.authorPhotoURL} name={comment.authorName} className={isReply ? 'h-7 w-7 text-xs' : 'h-8 w-8 text-sm'} />
+      <Avatar src={comment.authorPhotoURL} name={authorName} className={isReply ? 'h-7 w-7 text-xs' : 'h-8 w-8 text-sm'} />
       <div className="min-w-0 flex-1">
         <p className="text-sm">
-          <span className="font-semibold text-charcoal-100">{comment.authorName}</span>{' '}
+          <span className="font-semibold text-charcoal-100">{authorName}</span>{' '}
           {isReply && comment.replyTo?.authorName && (
             <span className="text-xs text-gold-500">▸ {comment.replyTo.authorName} </span>
           )}
@@ -121,7 +124,8 @@ export function PostPage() {
         </button>
       )}
     </div>
-  )
+    )
+  }
 
   return (
     <div className="pb-32">

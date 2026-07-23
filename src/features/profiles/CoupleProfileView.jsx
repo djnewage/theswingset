@@ -13,6 +13,7 @@ import { AuthorPosts } from '../feed/AuthorPosts'
 import { useBlocks } from '../feed/useBlocks'
 import { Avatar } from '../../components/Avatar'
 import { Lightbox } from '../../components/Lightbox'
+import { memberName } from '../../lib/names'
 import { monthYear } from '../../lib/time'
 
 export function CoupleProfileView() {
@@ -113,8 +114,8 @@ export function CoupleProfileView() {
                 to={`/u/${partner.id}`}
                 className="flex items-center gap-2 rounded-full py-1 pr-3 pl-1 ring-1 ring-charcoal-800 transition hover:bg-charcoal-900 hover:ring-charcoal-700"
               >
-                <Avatar src={partner.photoURL} name={partner.displayName} className="h-9 w-9 text-sm" />
-                <span className="text-sm text-charcoal-200">{partner.displayName}</span>
+                <Avatar src={partner.photoURL} name={memberName(partner)} className="h-9 w-9 text-sm" />
+                <span className="text-sm text-charcoal-200">{memberName(partner)}</span>
               </Link>
             ))}
           </div>

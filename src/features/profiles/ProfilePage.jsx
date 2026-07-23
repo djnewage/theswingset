@@ -14,6 +14,7 @@ import { usePendingRequests } from '../connections/usePendingRequests'
 import { isAdminUser } from '../verification/api'
 import { AuthorPosts } from '../feed/AuthorPosts'
 import { Lightbox } from '../../components/Lightbox'
+import { memberName } from '../../lib/names'
 import {
   createMemberInvite,
   deactivateMyInvite,
@@ -69,11 +70,11 @@ export function ProfilePage() {
             className={profile.photoURL ? 'cursor-zoom-in' : 'cursor-default'}
             aria-label={profile.photoURL ? 'View profile photo' : undefined}
           >
-            <Avatar src={profile.photoURL} name={profile.displayName} className="h-16 w-16 text-2xl" />
+            <Avatar src={profile.photoURL} name={memberName(profile)} className="h-16 w-16 text-2xl" />
           </button>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold text-charcoal-50">
-              {profile.displayName}
+              {memberName(profile)}
               {profile.verified && (
                 <span className="ml-1.5 text-gold-400" title="Photo verified">✓</span>
               )}

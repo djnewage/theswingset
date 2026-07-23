@@ -73,9 +73,13 @@ exports.onLikeCreated = onDocumentCreated('posts/{postId}/likes/{uid}', async (e
   const post = (await db.doc(`posts/${event.params.postId}`).get()).data()
   if (!post) return
   const liker = (await db.doc(`users/${event.params.uid}`).get()).data()
+  // Full name when the member shares one, else display name (mirrors client).
+  const likerName =
+    [liker?.firstName, liker?.lastName].filter(Boolean).join(' ').trim() ||
+    liker?.displayName || 'Someone'
   await notify(post.authorUids, event.params.uid, {
     type: 'like',
-    text: `${liker?.displayName ?? 'Someone'} liked your post`,
+    text: `${likerName} liked your post`,
     link: `/post/${event.params.postId}`,
   })
 })
