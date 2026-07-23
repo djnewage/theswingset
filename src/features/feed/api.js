@@ -128,6 +128,22 @@ export async function fetchPost(postId) {
  * Uses the (authorId, visibility, createdAt) composite index. Connections-only
  * and private posts are intentionally excluded here.
  */
+/**
+ * ALL of my own recent posts — every visibility, personal and couple alike
+ * (authorUids contains me for both). Powers the own-profile post history.
+ */
+export async function fetchAllMyPosts(uid, max = 15) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'posts'),
+      where('authorUids', 'array-contains', uid),
+      orderBy('createdAt', 'desc'),
+      limit(max),
+    ),
+  )
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+}
+
 export async function fetchAuthorPosts(authorId, max = 12) {
   const snap = await getDocs(
     query(

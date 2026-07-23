@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthContext'
 import { fetchUser } from './api'
@@ -20,6 +20,7 @@ export function UserProfileView() {
   const { user } = useAuth()
   const { block, isBlocked, unblock } = useBlocks()
   const [reporting, setReporting] = useState(false)
+  const [params] = useSearchParams()
 
   const { data: member, isPending, isError } = useQuery({
     queryKey: ['user', uid],
@@ -27,7 +28,10 @@ export function UserProfileView() {
     retry: false, // permission-denied = profile hidden from this viewer
   })
 
-  if (uid === user.uid) return <Navigate to="/profile" replace />
+  // "Preview how members see you" renders your own profile as a visitor
+  // would see it; without the flag, your own URL bounces to the profile tab.
+  const previewing = uid === user.uid && params.get('preview') === '1'
+  if (uid === user.uid && !previewing) return <Navigate to="/profile" replace />
 
   if (isPending) {
     return <p className="px-4 pt-16 text-center text-sm text-charcoal-400">Loading…</p>
@@ -44,6 +48,17 @@ export function UserProfileView() {
 
   return (
     <div className="px-4 pt-8 pb-10">
+      {previewing && (
+        <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-gold-500/10 px-4 py-3 ring-1 ring-gold-600/40">
+          <p className="text-xs leading-5 text-gold-300">
+            👀 This is how other members see your profile. Connections-gated
+            albums and posts may show less to people you're not connected with.
+          </p>
+          <Link to="/profile" className="shrink-0 text-xs font-semibold text-gold-400 hover:text-gold-300">
+            Done
+          </Link>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-4">
           <Avatar src={member.photoURL} name={member.displayName} className="h-16 w-16 text-2xl" />
@@ -66,27 +81,29 @@ export function UserProfileView() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-3">
-        <ConnectButton
-          target={{
-            type: 'user',
-            id: member.id,
-            uids: [member.id],
-            name: member.displayName,
-            photoURL: member.photoURL,
-          }}
-        />
-        <MessageButton member={member} />
-        <button onClick={() => setReporting(true)} className="text-xs text-charcoal-500 hover:text-charcoal-300">
-          Report
-        </button>
-        <button
-          onClick={() => (blocked ? unblock(uid) : block(uid))}
-          className="text-xs text-charcoal-500 hover:text-red-400"
-        >
-          {blocked ? 'Unblock' : 'Block'}
-        </button>
-      </div>
+      {!previewing && (
+        <div className="mt-4 flex items-center gap-3">
+          <ConnectButton
+            target={{
+              type: 'user',
+              id: member.id,
+              uids: [member.id],
+              name: member.displayName,
+              photoURL: member.photoURL,
+            }}
+          />
+          <MessageButton member={member} />
+          <button onClick={() => setReporting(true)} className="text-xs text-charcoal-500 hover:text-charcoal-300">
+            Report
+          </button>
+          <button
+            onClick={() => (blocked ? unblock(uid) : block(uid))}
+            className="text-xs text-charcoal-500 hover:text-red-400"
+          >
+            {blocked ? 'Unblock' : 'Block'}
+          </button>
+        </div>
+      )}
 
       {member.bio && (
         <p className="mt-4 whitespace-pre-wrap text-[15px] leading-6 text-charcoal-100">

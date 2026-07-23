@@ -1,18 +1,20 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { fetchAuthorPosts } from './api'
+import { fetchAllMyPosts, fetchAuthorPosts } from './api'
 import { useBlocks } from './useBlocks'
 import { timeAgo } from '../../lib/time'
 
 /**
- * Compact post history for a profile page — members-visible posts only, newest
- * first, each linking to the full post. Renders nothing until there's a post.
+ * Compact post history for a profile page, newest first, each row linking to
+ * the full post. Default: an author's members-visible posts (what visitors
+ * may see). With `mine`, every one of the viewer's own posts across all
+ * visibilities — personal and couple — with audience badges.
  */
-export function AuthorPosts({ authorId, heading = 'Recent posts' }) {
+export function AuthorPosts({ authorId, heading = 'Recent posts', mine = false }) {
   const { blockedIds } = useBlocks()
   const { data: posts = [], isPending } = useQuery({
-    queryKey: ['authorPosts', authorId],
-    queryFn: () => fetchAuthorPosts(authorId),
+    queryKey: ['authorPosts', authorId, mine],
+    queryFn: () => (mine ? fetchAllMyPosts(authorId) : fetchAuthorPosts(authorId)),
   })
 
   const visible = posts.filter((p) => !blockedIds.includes(p.authorId))
@@ -46,6 +48,9 @@ export function AuthorPosts({ authorId, heading = 'Recent posts' }) {
               )}
               <p className="mt-1 text-xs text-charcoal-500">
                 {timeAgo(p.createdAt)}
+                {mine && p.authorType === 'couple' && ' · as couple'}
+                {mine && p.visibility === 'connections' && ' · 🤝 connections'}
+                {mine && p.visibility === 'private' && ' · 🔒 private'}
                 {(p.likeCount ?? 0) > 0 && ` · 💛 ${p.likeCount}`}
                 {(p.commentCount ?? 0) > 0 && ` · 💬 ${p.commentCount}`}
               </p>

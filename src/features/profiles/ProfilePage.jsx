@@ -12,6 +12,7 @@ import { AlbumsSection } from '../albums/AlbumsSection'
 import { usePostableAuthors } from '../feed/useAuthor'
 import { usePendingRequests } from '../connections/usePendingRequests'
 import { isAdminUser } from '../verification/api'
+import { AuthorPosts } from '../feed/AuthorPosts'
 import {
   createMemberInvite,
   deactivateMyInvite,
@@ -105,6 +106,12 @@ export function ProfilePage() {
         >
           Edit profile
         </Link>
+        <Link
+          to={`/u/${user.uid}?preview=1`}
+          className="mt-2.5 block text-center text-xs font-medium text-gold-400 hover:text-gold-300"
+        >
+          Preview how members see you →
+        </Link>
       </div>
 
       <Link
@@ -160,6 +167,8 @@ export function ProfilePage() {
       </Link>
 
       <InviteFriendsCard uid={user.uid} />
+
+      <AuthorPosts authorId={user.uid} mine heading="Your recent posts" />
 
       <Link
         to="/reactions"
